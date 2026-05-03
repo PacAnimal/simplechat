@@ -32,7 +32,7 @@ async def list_chats(
     return result.scalars().all()
 
 
-@router.post("", response_model=ChatRead)
+@router.post("", response_model=ChatRead, status_code=201)
 async def create_chat(
     body: ChatCreate,
     profile: Profile = Depends(get_current_profile),

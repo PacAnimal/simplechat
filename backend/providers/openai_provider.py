@@ -41,7 +41,7 @@ class OpenAIProvider:
             raise ValueError("OPENAI_API_KEY is not configured")
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    async def stream_chat(
+    def stream_chat(
         self,
         messages: list[ChatMessage],
         model: str,

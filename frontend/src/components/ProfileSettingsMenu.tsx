@@ -90,13 +90,18 @@ function AvatarPanel({ profile, onUpdated, onClose }: { profile: Profile; onUpda
   const [selected, setSelected] = useState(profile.avatar);
   const [saving, setSaving] = useState(false);
 
+  const [error, setError] = useState("");
+
   async function handleSave() {
     if (selected === profile.avatar) { onClose(); return; }
     setSaving(true);
+    setError("");
     try {
       const updated = await api.updateAvatar(profile.id, selected);
       storeProfile(updated);
       onUpdated(updated);
+    } catch {
+      setError("Failed to save avatar");
     } finally {
       setSaving(false);
     }
@@ -125,6 +130,7 @@ function AvatarPanel({ profile, onUpdated, onClose }: { profile: Profile; onUpda
             </button>
           ))}
         </div>
+        {error && <p className="text-xs text-red-400 mb-1">{error}</p>}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
             Cancel

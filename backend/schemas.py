@@ -19,9 +19,11 @@ class ChatUpdate(BaseModel):
     provider: str | None = Field(default=None, pattern="^(openai|anthropic)$")
 
     @model_validator(mode="after")
-    def model_requires_provider(self) -> "ChatUpdate":
+    def model_and_provider_must_change_together(self) -> "ChatUpdate":
         if self.model is not None and self.provider is None:
             raise ValueError("provider is required when changing model")
+        if self.provider is not None and self.model is None:
+            raise ValueError("model is required when changing provider")
         return self
 
 
@@ -93,7 +95,7 @@ class SendMessageRequest(BaseModel):
 class ProfileCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=1)
-    avatar: int = Field(default=0, ge=0, le=99)
+    avatar: int = Field(default=0, ge=0, le=50)
 
 
 class ProfileRead(BaseModel):
@@ -115,7 +117,7 @@ class LoginResponse(BaseModel):
 
 
 class ProfileAvatarUpdate(BaseModel):
-    avatar: int = Field(..., ge=0, le=99)
+    avatar: int = Field(..., ge=0, le=50)
 
 
 class PasswordChange(BaseModel):

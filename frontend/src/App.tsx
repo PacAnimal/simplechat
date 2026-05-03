@@ -49,6 +49,7 @@ export default function App() {
   function handleChatCreated(chat: Chat) {
     setSelectedChatId(chat.id);
     setNewChatOpen(false);
+    setPendingMessage(undefined);
   }
 
   return (

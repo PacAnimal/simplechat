@@ -29,6 +29,9 @@ class StubProvider:
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
 
+    def stream_chat(self, messages: list[ChatMessage], model: str, web_search: bool = False) -> AsyncIterator[StreamEvent]:
+        return self._gen(messages, model, web_search)
+
     def _stream(self, messages: list[ChatMessage], model: str, web_search: bool) -> AsyncIterator[StreamEvent]:
         return self._gen(messages, model, web_search)
 

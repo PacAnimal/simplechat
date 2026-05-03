@@ -12,7 +12,7 @@ async def test_list_chats_empty(client: AsyncClient):
 
 async def test_create_chat_openai(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     data = r.json()
     assert data["provider"] == "openai"
     assert data["model"] == "gpt-4o"
@@ -23,7 +23,7 @@ async def test_create_chat_openai(client: AsyncClient):
 
 async def test_create_chat_anthropic(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     data = r.json()
     assert data["provider"] == "anthropic"
     assert data["model"] == "claude-sonnet-4-6"
@@ -31,7 +31,7 @@ async def test_create_chat_anthropic(client: AsyncClient):
 
 async def test_create_chat_default_model(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "openai"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["model"] == "gpt-4o"
 
 
@@ -158,7 +158,7 @@ async def test_update_chat_title_too_long(client: AsyncClient):
 
 async def test_timestamps_include_timezone(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     data = r.json()
     # must include UTC offset so JS new Date() interprets correctly
     assert "+00:00" in data["created_at"] or data["created_at"].endswith("Z")
@@ -167,11 +167,11 @@ async def test_timestamps_include_timezone(client: AsyncClient):
 
 async def test_create_chat_with_explicit_title(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "My Project"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["title"] == "My Project"
 
 
 async def test_create_chat_without_title_defaults_to_new_chat(client: AsyncClient):
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["title"] == "New Chat"

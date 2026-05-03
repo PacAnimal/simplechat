@@ -33,7 +33,7 @@ class AnthropicProvider:
             raise ValueError("ANTHROPIC_API_KEY is not configured")
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    async def stream_chat(
+    def stream_chat(
         self,
         messages: list[ChatMessage],
         model: str,

@@ -14,7 +14,6 @@ from .model_registry import refresh as refresh_models
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs(settings.uploads_dir, exist_ok=True)
-    os.makedirs(settings.generated_dir, exist_ok=True)
     os.makedirs("./data", exist_ok=True)
     await run_migrations()
     try:
@@ -28,7 +27,7 @@ app = FastAPI(title="SimpleChat", lifespan=lifespan)
 
 app.include_router(router)
 
-# serve generated images
+# StaticFiles requires the directory to exist at mount time (before lifespan runs)
 os.makedirs(settings.generated_dir, exist_ok=True)
 app.mount("/generated", StaticFiles(directory=settings.generated_dir), name="generated")
 

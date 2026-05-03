@@ -26,7 +26,7 @@ async def _auth_headers(c: AsyncClient, name: str, password: str) -> dict[str, s
 
 async def _create_chat(c: AsyncClient, headers: dict) -> int:
     r = await c.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"}, headers=headers)
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     return r.json()["id"]
 
 

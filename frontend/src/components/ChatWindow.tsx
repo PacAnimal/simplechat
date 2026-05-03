@@ -64,7 +64,7 @@ export default function ChatWindow({ chatId, initialMessage, onDeleted }: Props)
   // auto-scroll on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streaming?.content]);
+  }, [messages.length, streaming?.content, streaming?.images.length, streaming?.toolCalls.length]);
 
   async function handleSend(content: string, attachmentIds: number[]) {
     abortRef.current?.abort();

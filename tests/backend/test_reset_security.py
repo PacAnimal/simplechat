@@ -1,5 +1,5 @@
 """Tests for the reset endpoint access control."""
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -7,12 +7,21 @@ from fastapi import HTTPException
 pytestmark = pytest.mark.asyncio
 
 
+def _make_db_mock():
+    """AsyncSession mock that handles .execute(...).scalars().all() chain."""
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    db = AsyncMock()
+    db.execute.return_value = execute_result
+    return db
+
+
 async def test_reset_requires_secret_header_when_configured():
     import backend.api.testing as m
     original = m.settings.reset_secret
     m.settings.reset_secret = "correct-secret"
     try:
-        mock_db = AsyncMock()
+        mock_db = _make_db_mock()
 
         # wrong secret → 403
         with pytest.raises(HTTPException) as exc_info:
@@ -37,7 +46,7 @@ async def test_reset_allows_without_header_when_secret_not_configured():
     original = m.settings.reset_secret
     m.settings.reset_secret = None
     try:
-        mock_db = AsyncMock()
+        mock_db = _make_db_mock()
         # no secret configured → no auth required
         await m.reset_db(db=mock_db, x_reset_secret=None)
         mock_db.commit.assert_awaited()

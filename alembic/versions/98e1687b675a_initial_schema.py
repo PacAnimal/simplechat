@@ -28,8 +28,8 @@ def upgrade() -> None:
     sa.Column('provider', sa.String(length=50), nullable=False),
     sa.Column('model', sa.String(length=100), nullable=False),
     sa.Column('web_search_enabled', sa.Boolean(), nullable=True),
-    sa.Column('created_at', backend.models.UTCDateTime(), nullable=True),
-    sa.Column('updated_at', backend.models.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('chats', schema=None) as batch_op:
@@ -40,7 +40,7 @@ def upgrade() -> None:
     sa.Column('chat_id', sa.Integer(), nullable=False),
     sa.Column('role', sa.String(length=20), nullable=False),
     sa.Column('content', sa.Text(), nullable=False),
-    sa.Column('created_at', backend.models.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['chat_id'], ['chats.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -55,7 +55,7 @@ def upgrade() -> None:
     sa.Column('mime_type', sa.String(length=100), nullable=False),
     sa.Column('path', sa.String(length=500), nullable=False),
     sa.Column('size', sa.BigInteger(), nullable=False),
-    sa.Column('created_at', backend.models.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['chat_id'], ['chats.id'], ),
     sa.ForeignKeyConstraint(['message_id'], ['messages.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -69,7 +69,7 @@ def upgrade() -> None:
     sa.Column('message_id', sa.Integer(), nullable=True),
     sa.Column('prompt', sa.Text(), nullable=False),
     sa.Column('path', sa.String(length=500), nullable=False),
-    sa.Column('created_at', backend.models.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['chat_id'], ['chats.id'], ),
     sa.ForeignKeyConstraint(['message_id'], ['messages.id'], ),
     sa.PrimaryKeyConstraint('id')

@@ -96,7 +96,7 @@ async def _event_stream(chat_id: int, profile_id: int, user_content: str, attach
     generated_images: list[dict] = []
 
     try:
-        stream = provider._stream(messages, chat.model, chat.web_search_enabled)
+        stream = provider.stream_chat(messages, chat.model, chat.web_search_enabled)
         async for event in stream:
             etype = event.get("type")
             if etype == "text_delta":

@@ -1,21 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { resetDB, createChat, sendMessage, BACKEND } from "./helpers";
-import { request } from "@playwright/test";
 
-async function enableWebSearch(chatId: number) {
-  const ctx = await request.newContext();
-  await ctx.patch(`${BACKEND}/api/chats/${chatId}`, {
+async function enableWebSearch(page: Page, chatId: number) {
+  await page.request.patch(`${BACKEND}/api/chats/${chatId}`, {
     data: { web_search_enabled: true },
     headers: { "Content-Type": "application/json" },
   });
-  await ctx.dispose();
 }
 
-async function getLastChatId(): Promise<number> {
-  const ctx = await request.newContext();
-  const res = await ctx.get(`${BACKEND}/api/chats`);
+async function getLastChatId(page: Page): Promise<number> {
+  const res = await page.request.get(`${BACKEND}/api/chats`);
   const chats = await res.json();
-  await ctx.dispose();
   return chats[0].id;
 }
 
@@ -26,8 +21,8 @@ test.beforeEach(async ({ page }) => {
 
 test("OpenAI web search finds Norwegian car dealers near Oslo", async ({ page }) => {
   await createChat(page, "openai", "gpt-4o-mini");
-  const chatId = await getLastChatId();
-  await enableWebSearch(chatId);
+  const chatId = await getLastChatId(page);
+  await enableWebSearch(page, chatId);
 
   // reload so the web search toggle reflects the enabled state
   await page.reload();
@@ -48,8 +43,8 @@ test("OpenAI web search finds Norwegian car dealers near Oslo", async ({ page })
 
 test("Anthropic web search finds Norwegian car dealers near Oslo", async ({ page }) => {
   await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
-  const chatId = await getLastChatId();
-  await enableWebSearch(chatId);
+  const chatId = await getLastChatId(page);
+  await enableWebSearch(page, chatId);
 
   await page.reload();
   await page.locator('[data-testid^="chat-item-"]').first().click();
