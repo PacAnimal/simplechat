@@ -8,8 +8,8 @@ from openai import AsyncOpenAI
 from .config import settings
 from .schemas import PROVIDER_DEFAULTS
 
-_CHAT_RE = re.compile(r'^(gpt-4|gpt-3\.5-turbo|o[0-9]|chatgpt-)', re.IGNORECASE)
-_EXCLUDE_RE = re.compile(r'(embed|whisper|tts-|instruct|realtime|transcr|moderat|search|audio)', re.IGNORECASE)
+_CHAT_RE = re.compile(r'^(gpt-|o[0-9]|chatgpt-)', re.IGNORECASE)
+_EXCLUDE_RE = re.compile(r'(embed|whisper|tts-|dall-e|instruct|realtime|transcr|moderat|search|audio|image)', re.IGNORECASE)
 
 _FALLBACK_OPENAI = [
     {"id": "gpt-4o", "label": "GPT-4o"},

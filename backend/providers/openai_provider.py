@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 
 from ..config import settings
 from .base import (
+    CALCULATOR_TOOL,
     GENERATE_IMAGE_TOOL,
     MAX_TOOL_ITERATIONS,
     WEB_SEARCH_TOOL_OPENAI,
@@ -55,6 +56,7 @@ class OpenAIProvider:
     ) -> AsyncIterator[StreamEvent]:
         tools = [
             {"type": "function", "function": GENERATE_IMAGE_TOOL},
+            {"type": "function", "function": CALCULATOR_TOOL},
         ]
         if web_search:
             tools.append({"type": "function", "function": WEB_SEARCH_TOOL_OPENAI})

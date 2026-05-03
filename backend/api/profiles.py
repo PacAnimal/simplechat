@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import create_token, get_current_profile, hash_password, verify_password
+from ..config import settings
+from ..net import is_local
 from ..database import get_db
 from ..models import Profile
 from ..schemas import (
@@ -17,6 +19,15 @@ from ..schemas import (
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 
+def _can_create(request: Request) -> bool:
+    if settings.create == "any":
+        return True
+    if settings.create == "none":
+        return False
+    client_ip = request.client.host if request.client else ""
+    return is_local(client_ip)
+
+
 @router.get("", response_model=list[ProfileRead])
 async def list_profiles(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Profile).order_by(Profile.created_at))
@@ -24,7 +35,9 @@ async def list_profiles(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=ProfileRead, status_code=201)
-async def create_profile(body: ProfileCreate, db: AsyncSession = Depends(get_db)):
+async def create_profile(request: Request, body: ProfileCreate, db: AsyncSession = Depends(get_db)):
+    if not _can_create(request):
+        raise HTTPException(403, "Profile creation is not allowed from this address")
     existing = await db.execute(select(Profile).where(Profile.name == body.name))
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Profile name already taken")

@@ -22,6 +22,13 @@ export default function ProfilePicker({ onLogin }: Props) {
     queryFn: api.listProfiles,
   });
 
+  const { data: config } = useQuery({
+    queryKey: ["config"],
+    queryFn: api.getConfig,
+  });
+
+  const canCreate = config?.can_create_profile ?? false;
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     if (!loginTarget) return;
@@ -69,17 +76,19 @@ export default function ProfilePicker({ onLogin }: Props) {
             <ProfileCard key={profile.id} profile={profile} onClick={() => openLogin(profile)} />
           ))}
 
-          {/* add profile button */}
-          <button
-            onClick={() => setAddOpen(true)}
-            className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border hover:border-accent/50 bg-elevated hover:bg-hover transition-colors p-6 min-h-[120px]"
-            data-testid="add-profile-button"
-          >
-            <div className="w-10 h-10 rounded-full bg-hover flex items-center justify-center">
-              <PlusIcon size={20} className="text-muted" />
-            </div>
-            <span className="text-xs text-muted font-medium">Add profile</span>
-          </button>
+          {/* add profile button — only shown when creation is permitted */}
+          {canCreate && (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border hover:border-accent/50 bg-elevated hover:bg-hover transition-colors p-6 min-h-[120px]"
+              data-testid="add-profile-button"
+            >
+              <div className="w-10 h-10 rounded-full bg-hover flex items-center justify-center">
+                <PlusIcon size={20} className="text-muted" />
+              </div>
+              <span className="text-xs text-muted font-medium">Add profile</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -4,13 +4,25 @@ from collections.abc import AsyncIterator
 import anthropic
 
 from ..config import settings
-from .base import GENERATE_IMAGE_TOOL, MAX_TOOL_ITERATIONS, ChatMessage, StreamEvent
+from .base import (
+    CALCULATOR_TOOL,
+    GENERATE_IMAGE_TOOL,
+    MAX_TOOL_ITERATIONS,
+    ChatMessage,
+    StreamEvent,
+)
 from .base import execute_tool as _execute_tool
 
 _ANTHROPIC_IMAGE_TOOL = {
     "name": GENERATE_IMAGE_TOOL["name"],
     "description": GENERATE_IMAGE_TOOL["description"],
     "input_schema": GENERATE_IMAGE_TOOL["parameters"],
+}
+
+_ANTHROPIC_CALCULATOR_TOOL = {
+    "name": CALCULATOR_TOOL["name"],
+    "description": CALCULATOR_TOOL["description"],
+    "input_schema": CALCULATOR_TOOL["parameters"],
 }
 
 _WEB_SEARCH_TOOL = {
@@ -39,7 +51,7 @@ class AnthropicProvider:
         model: str,
         web_search: bool,
     ) -> AsyncIterator[StreamEvent]:
-        tools: list = [_ANTHROPIC_IMAGE_TOOL]
+        tools: list = [_ANTHROPIC_IMAGE_TOOL, _ANTHROPIC_CALCULATOR_TOOL]
         if web_search:
             tools.append(_WEB_SEARCH_TOOL)
 

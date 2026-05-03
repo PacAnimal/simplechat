@@ -32,13 +32,21 @@ export async function sendMessage(page: Page, text: string, timeoutMs = 90_000) 
     .waitFor({ state: "visible", timeout: timeoutMs });
 }
 
-export async function uploadTextFile(page: Page, filename: string, content: string) {
+export async function uploadFile(
+  page: Page,
+  filename: string,
+  content: string,
+  mimeType: string = "text/plain",
+) {
   const input = page.locator('input[type="file"]');
   await input.setInputFiles({
     name: filename,
-    mimeType: "text/plain",
+    mimeType,
     buffer: Buffer.from(content),
   });
-  // wait for upload confirmation (attachment appears)
   await page.locator('[data-testid="attachment-chip"]').waitFor({ state: "visible", timeout: 10_000 });
+}
+
+export async function uploadTextFile(page: Page, filename: string, content: string) {
+  await uploadFile(page, filename, content, "text/plain");
 }

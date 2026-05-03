@@ -1,4 +1,6 @@
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -12,6 +14,10 @@ class Settings(BaseSettings):
     allow_reset: bool = False
     reset_secret: str | None = None
     jwt_secret: str = "simplechat-dev-secret-change-in-production"
+    # profile creation policy: "local" (RFC-1918 + loopback), "any", or "none"
+    create: Literal["local", "any", "none"] = "local"
+    # trust X-Forwarded-For / X-Forwarded-Proto from a local reverse proxy
+    incoming_http_proxy: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

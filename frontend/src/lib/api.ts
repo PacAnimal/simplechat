@@ -56,6 +56,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
+  getConfig: () => req<{ can_create_profile: boolean }>("GET", "/config"),
   // profiles (no auth required)
   listProfiles: () => req<Profile[]>("GET", "/profiles"),
   createProfile: (name: string, password: string, avatar: number) =>

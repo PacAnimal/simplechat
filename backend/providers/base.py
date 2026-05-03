@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+from ..tools.calculator import calculate as _calculate
 from ..tools.image_gen import generate_image as _generate_image
 
 MAX_TOOL_ITERATIONS = 10
@@ -8,6 +9,8 @@ MAX_TOOL_ITERATIONS = 10
 async def execute_tool(name: str, args: dict) -> dict:
     if name == "generate_image":
         return await _generate_image(args.get("prompt", ""), args.get("size", "1024x1024"))
+    if name == "calculate":
+        return _calculate(args.get("expression", ""))
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -26,6 +29,26 @@ class StreamEvent(TypedDict, total=False):
     message_id: int
     title: str
 
+
+CALCULATOR_TOOL = {
+    "name": "calculate",
+    "description": (
+        "Evaluate a mathematical expression. Supports arithmetic (+, -, *, /, **, //, %), "
+        "functions (sqrt, cbrt, sin, cos, tan, asin, acos, atan, log, log2, log10, exp, "
+        "abs, ceil, floor, round, factorial, degrees, radians, hypot), "
+        "and constants (pi, e, tau). Always use this for any arithmetic or math calculation."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "expression": {
+                "type": "string",
+                "description": "A mathematical expression, e.g. '2 + 2', 'sqrt(144)', 'sin(pi / 2)', 'factorial(10)'",
+            },
+        },
+        "required": ["expression"],
+    },
+}
 
 GENERATE_IMAGE_TOOL = {
     "name": "generate_image",

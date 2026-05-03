@@ -12,13 +12,17 @@ interface Props {
 export default function AddProfileDialog({ onCreated, onClose }: Props) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [avatar, setAvatar] = useState(() => Math.floor(Math.random() * AVATARS.length));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const passwordMismatch = confirm.length > 0 && password !== confirm;
+  const canSubmit = !saving && name.trim().length > 0 && password.length > 0 && password === confirm;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !password) return;
+    if (!canSubmit) return;
     setSaving(true);
     setError("");
     try {
@@ -68,17 +72,36 @@ export default function AddProfileDialog({ onCreated, onClose }: Props) {
             />
           </div>
 
+          {/* confirm password */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted uppercase tracking-wide">Confirm password</label>
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Repeat your password"
+              className={cn(
+                "bg-input border rounded-xl px-4 py-2.5 text-sm text-primary placeholder:text-muted focus:outline-none transition-colors",
+                passwordMismatch ? "border-red-400 focus:border-red-400" : "border-border focus:border-accent/60",
+              )}
+              data-testid="add-profile-confirm"
+            />
+            {passwordMismatch && (
+              <p className="text-xs text-red-400">Passwords don't match</p>
+            )}
+          </div>
+
           {/* avatar picker */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-medium text-muted uppercase tracking-wide">Avatar</label>
-            <div className="grid grid-cols-10 gap-1.5">
+            <div className="grid grid-cols-10 gap-2">
               {AVATARS.map((av, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setAvatar(i)}
                   className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-base transition-all",
+                    "w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all",
                     avatar === i ? "ring-2 ring-accent ring-offset-2 ring-offset-elevated scale-110" : "hover:scale-105 opacity-70 hover:opacity-100",
                   )}
                   style={{ backgroundColor: av.bg }}
@@ -102,7 +125,7 @@ export default function AddProfileDialog({ onCreated, onClose }: Props) {
             </button>
             <button
               type="submit"
-              disabled={saving || !name.trim() || !password}
+              disabled={!canSubmit}
               className="flex-1 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-50"
               data-testid="add-profile-submit"
             >
