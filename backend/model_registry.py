@@ -30,6 +30,8 @@ _CACHE_TTL = 3600.0
 
 
 async def _fetch_openai() -> list[dict]:
+    if not settings.openai_api_key:
+        return []
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     resp = await client.models.list()
     models_with_ts = [
@@ -42,6 +44,8 @@ async def _fetch_openai() -> list[dict]:
 
 
 async def _fetch_anthropic() -> list[dict]:
+    if not settings.anthropic_api_key:
+        return []
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     resp = await client.models.list()
     return [

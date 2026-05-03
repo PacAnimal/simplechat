@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowUpIcon, PaperclipIcon, GlobeIcon, XIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import { formatBytes } from "../lib/utils";
@@ -10,6 +10,7 @@ interface Props {
   webSearchEnabled: boolean;
   onToggleWebSearch: () => void;
   disabled?: boolean;
+  initialValue?: string;
 }
 
 export default function MessageInput({
@@ -18,12 +19,27 @@ export default function MessageInput({
   webSearchEnabled,
   onToggleWebSearch,
   disabled,
+  initialValue,
 }: Props) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialValue ?? "");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // sync initial value when it first arrives (suggestion card path)
+  useEffect(() => {
+    if (initialValue) {
+      setText(initialValue);
+      if (textareaRef.current) {
+        const el = textareaRef.current;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+        el.focus();
+      }
+    }
+  }, [initialValue]);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -52,12 +68,16 @@ export default function MessageInput({
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    setUploadError(null);
     setUploading(true);
     try {
       const att = await onUploadFile(file);
       setAttachments((prev) => [...prev, att]);
     } catch (err) {
-      alert(`Upload failed: ${err}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      // extract user-friendly message from "415: Unsupported file type..."
+      const body = msg.includes(": ") ? msg.split(": ").slice(1).join(": ") : msg;
+      setUploadError(body);
     } finally {
       setUploading(false);
     }
@@ -68,6 +88,16 @@ export default function MessageInput({
   return (
     <div className="pb-6 px-4">
       <div className="max-w-3xl mx-auto">
+        {/* upload error */}
+        {uploadError && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2 mb-2">
+            <span className="flex-1">{uploadError}</span>
+            <button onClick={() => setUploadError(null)} className="text-muted hover:text-primary flex-shrink-0">
+              <XIcon size={11} />
+            </button>
+          </div>
+        )}
+
         {/* attachment pills */}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2 px-1">
@@ -124,7 +154,7 @@ export default function MessageInput({
                 type="file"
                 className="hidden"
                 onChange={handleFileChange}
-                accept="image/*,.pdf,.txt,.md,.csv,.json"
+                accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
               />
 
               {/* web search */}

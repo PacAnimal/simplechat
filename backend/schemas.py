@@ -1,11 +1,9 @@
-from pydantic import BaseModel, Field, model_validator
+import os
 from datetime import datetime
 from typing import Optional
-import os
+from pydantic import BaseModel, Field, model_validator
 
 
-OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini"]
-ANTHROPIC_MODELS = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
 PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6"}
 
 

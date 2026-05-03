@@ -37,7 +37,7 @@ export type StreamEvent =
   | { type: "thinking_delta"; content: string }
   | { type: "tool_start"; name: string }
   | { type: "tool_result"; name: string; content: string }
-  | { type: "image_generated"; url: string; prompt: string; path: string }
+  | { type: "image_generated"; url: string; prompt: string }
   | { type: "searching"; name: string }
   | { type: "done"; message_id: number }
   | { type: "chat_title"; title: string }

@@ -4,7 +4,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
-import { XIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, LoaderIcon, GlobeIcon, ImageIcon } from "lucide-react";
+import {
+  XIcon, ChevronDownIcon, ChevronRightIcon,
+  CheckIcon, LoaderIcon, GlobeIcon, ImageIcon, CopyIcon,
+} from "lucide-react";
 import type { Message, InlineImage, ToolCallRecord } from "../types";
 
 interface Props {
@@ -68,8 +71,8 @@ function ImageGrid({ images }: { images: InlineImage[] }) {
   const [lightbox, setLightbox] = useState<InlineImage | null>(null);
   return (
     <>
-      {images.map((img, i) => (
-        <div key={i} className="mt-4">
+      {images.map((img) => (
+        <div key={img.url} className="mt-4">
           <img
             src={img.url}
             alt={img.prompt}
@@ -85,6 +88,49 @@ function ImageGrid({ images }: { images: InlineImage[] }) {
     </>
   );
 }
+
+function getNodeText(node: React.ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (!node) return "";
+  if (Array.isArray(node)) return node.map(getNodeText).join("");
+  if (typeof node === "object" && "props" in (node as object)) {
+    return getNodeText((node as React.ReactElement).props.children);
+  }
+  return "";
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+  return (
+    <button
+      onClick={copy}
+      className="absolute top-2 right-2 p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors opacity-0 group-hover/pre:opacity-100"
+      title="Copy code"
+    >
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+    </button>
+  );
+}
+
+const markdownComponents = {
+  pre: ({ children, ...props }: React.ComponentPropsWithoutRef<"pre">) => {
+    const text = getNodeText(children);
+    return (
+      <div className="relative group/pre">
+        <pre {...props}>{children}</pre>
+        {text && <CopyButton text={text} />}
+      </div>
+    );
+  },
+};
 
 export default function MessageBubble({ message, images = message.images ?? [] }: Props) {
   const isUser = message.role === "user";
@@ -102,7 +148,11 @@ export default function MessageBubble({ message, images = message.images ?? [] }
           </p>
         ) : (
           <div className="prose-chat">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={markdownComponents}
+            >
               {message.content}
             </ReactMarkdown>
           </div>
@@ -120,7 +170,11 @@ export function StreamingBubble({ content, images }: { content: string; images: 
       <div className="flex-1 min-w-0 pt-0.5">
         <p className="text-xs font-semibold text-muted mb-1.5">Assistant</p>
         <div className="prose-chat">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
+          >
             {content || "​"}
           </ReactMarkdown>
           <span className="cursor-blink" />

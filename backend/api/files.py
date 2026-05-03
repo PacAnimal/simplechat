@@ -12,12 +12,27 @@ from ..config import settings
 router = APIRouter(tags=["files"])
 
 ALLOWED_MIME_TYPES = {
-    "image/jpeg", "image/png", "image/gif", "image/webp",
-    "application/pdf",
-    "text/plain", "text/markdown", "text/csv",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
     "application/json",
 }
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+def _validate_content(content: bytes, mime_type: str) -> None:
+    """Reject files whose content doesn't match their claimed type."""
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(415, "File content is not valid UTF-8 text")
+
+    if mime_type == "application/json":
+        import json
+        try:
+            json.loads(text)
+        except Exception:
+            raise HTTPException(415, "File claims to be JSON but content is not valid JSON")
 
 
 @router.post("/chats/{chat_id}/files", response_model=AttachmentRead)
@@ -36,7 +51,9 @@ async def upload_file(
 
     mime = file.content_type or "application/octet-stream"
     if mime not in ALLOWED_MIME_TYPES:
-        raise HTTPException(415, f"Unsupported file type: {mime}")
+        raise HTTPException(415, f"Unsupported file type: {mime}. Supported: text/plain, text/markdown, text/csv, application/json")
+
+    _validate_content(content, mime)
 
     ext = os.path.splitext(file.filename or "")[1] or ".bin"
     filename = f"{uuid.uuid4().hex}{ext}"

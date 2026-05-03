@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GlobeIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, GlobeIcon, Trash2Icon, XIcon } from "lucide-react";
 import { api, streamMessage } from "../lib/api";
 import type { Message, ToolCallRecord } from "../types";
 import { PROVIDER_LABELS } from "../types";
@@ -10,6 +10,7 @@ import { cn } from "../lib/utils";
 
 interface Props {
   chatId: number;
+  initialMessage?: string;
   onDeleted: () => void;
 }
 
@@ -20,11 +21,14 @@ interface StreamingState {
   toolCalls: ToolCallRecord[];
 }
 
-export default function ChatWindow({ chatId, onDeleted }: Props) {
+export default function ChatWindow({ chatId, initialMessage, onDeleted }: Props) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [sending, setSending] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", chatId],
@@ -33,10 +37,7 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
 
   const chatMeta = useQuery({
     queryKey: ["chat", chatId],
-    queryFn: async () => {
-      const chats = await api.listChats();
-      return chats.find((c) => c.id === chatId) ?? null;
-    },
+    queryFn: () => api.getChat(chatId),
   });
 
   const deleteMutation = useMutation({
@@ -56,17 +57,27 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
     },
   });
 
+  // abort on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
   // auto-scroll on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, streaming?.content]);
 
   async function handleSend(content: string, attachmentIds: number[]) {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setSending(true);
+    setStreamError(null);
     setStreaming({ content: "", images: [], thinking: "", toolCalls: [] });
 
     try {
-      for await (const event of streamMessage(chatId, content, attachmentIds)) {
+      for await (const event of streamMessage(chatId, content, attachmentIds, controller.signal)) {
         switch (event.type) {
           case "text_delta":
             setStreaming((s) => s ? { ...s, content: s.content + event.content } : s);
@@ -93,7 +104,6 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
             setStreaming((s) => {
               if (!s) return s;
               const calls = [...s.toolCalls];
-              // mark the last matching undone call as done
               for (let i = calls.length - 1; i >= 0; i--) {
                 if (calls[i].name === event.name && !calls[i].done) {
                   calls[i] = { ...calls[i], done: true };
@@ -112,13 +122,17 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
             setStreaming(null);
             break;
           case "error":
+            setStreamError(event.message);
             setStreaming(null);
-            console.error("Stream error:", event.message);
             break;
         }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // navigated away — clean exit
+      } else {
+        setStreamError("Something went wrong. Please try again.");
+      }
       setStreaming(null);
     } finally {
       setSending(false);
@@ -148,27 +162,46 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
         </div>
 
         <div className="flex items-center gap-1">
-          {/* web search indicator */}
           {meta?.web_search_enabled && (
             <div className="flex items-center gap-1 text-xs text-accent bg-accent/10 border border-accent/20 rounded-full px-2.5 py-1">
               <GlobeIcon size={11} />
               <span>Search on</span>
             </div>
           )}
-          <button
-            onClick={() => deleteMutation.mutate()}
-            className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-hover transition-colors ml-1"
-            title="Delete chat"
-            data-testid="delete-chat-header"
-          >
-            <Trash2Icon size={15} />
-          </button>
+
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 ml-1">
+              <span className="text-xs text-muted">Delete this chat?</span>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                className="text-xs text-red-400 hover:text-red-300 font-medium"
+                data-testid="confirm-delete-chat"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-muted hover:text-primary font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-hover transition-colors ml-1"
+              title="Delete chat"
+              data-testid="delete-chat-header"
+            >
+              <Trash2Icon size={15} />
+            </button>
+          )}
         </div>
       </header>
 
       {/* messages */}
       <div className="flex-1 overflow-y-auto py-8 px-4">
-        {messages.length === 0 && !streaming ? (
+        {messages.length === 0 && !streaming && !streamError ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted text-sm">Send a message to begin</p>
           </div>
@@ -185,6 +218,19 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
                 <StreamingBubble content={streaming.content} images={streaming.images} />
               </>
             )}
+
+            {streamError && (
+              <div className="flex gap-3 max-w-3xl w-full mx-auto">
+                <div className="w-7 h-7 flex-shrink-0" />
+                <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2 flex-1">
+                  <AlertCircleIcon size={14} className="flex-shrink-0" />
+                  <span className="flex-1">{streamError}</span>
+                  <button onClick={() => setStreamError(null)} className="text-muted hover:text-primary">
+                    <XIcon size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div ref={bottomRef} className="h-4" />
@@ -197,6 +243,7 @@ export default function ChatWindow({ chatId, onDeleted }: Props) {
         webSearchEnabled={meta?.web_search_enabled ?? false}
         onToggleWebSearch={() => toggleWebSearch.mutate()}
         disabled={sending}
+        initialValue={initialMessage}
       />
     </div>
   );

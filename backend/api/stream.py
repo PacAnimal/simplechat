@@ -1,25 +1,31 @@
+import asyncio
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from ..database import get_db
-from ..models import Chat, Message, Attachment, GeneratedImage
+from ..models import Chat, Message, Attachment, GeneratedImage, utcnow
 from ..schemas import SendMessageRequest
 from ..providers import OpenAIProvider, AnthropicProvider
 from ..providers.stub_provider import StubProvider
 from ..config import settings
 
+logger = logging.getLogger(__name__)
+
 _TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/csv", "application/json"}
 
 
-def _attachment_text(att: Attachment) -> str:
+async def _attachment_text(att: Attachment) -> str:
     if att.mime_type not in _TEXT_MIME_TYPES:
         return ""
     try:
-        with open(att.path, "r", encoding="utf-8", errors="replace") as f:
-            body = f.read(50_000)
+        def _read():
+            with open(att.path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read(50_000)
+        body = await asyncio.to_thread(_read)
         return f"\n\n[Attached file: {att.filename}]\n```\n{body}\n```"
     except Exception:
         return ""
@@ -50,7 +56,7 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
         if m.role == "user":
             content = m.content
             for att in m.attachments:
-                content += _attachment_text(att)
+                content += await _attachment_text(att)
             out.append({"role": "user", "content": content})
         elif m.role == "assistant":
             out.append({"role": "assistant", "content": m.content})
@@ -98,9 +104,10 @@ async def _event_stream(chat_id: int, user_content: str, attachment_ids: list[in
                 generated_images.append(event)
             yield f"data: {json.dumps(event)}\n\n"
 
-        # save assistant message
+        # save assistant message and bump updated_at in one commit
         assistant_msg = Message(chat_id=chat_id, role="assistant", content=full_content)
         db.add(assistant_msg)
+        chat.updated_at = utcnow()
         await db.commit()
         await db.refresh(assistant_msg)
 
@@ -125,6 +132,7 @@ async def _event_stream(chat_id: int, user_content: str, attachment_ids: list[in
         yield f"data: {json.dumps({'type': 'done', 'message_id': assistant_msg.id})}\n\n"
 
     except Exception as e:
+        logger.exception("Stream error for chat %d", chat_id)
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
 

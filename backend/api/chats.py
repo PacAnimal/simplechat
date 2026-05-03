@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
@@ -10,8 +11,15 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 
 
 @router.get("", response_model=list[ChatRead])
-async def list_chats(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Chat).order_by(desc(Chat.updated_at)))
+async def list_chats(
+    limit: Optional[int] = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(Chat).order_by(desc(Chat.updated_at)).offset(offset)
+    if limit is not None:
+        q = q.limit(limit)
+    result = await db.execute(q)
     return result.scalars().all()
 
 
@@ -59,14 +67,23 @@ async def delete_chat(chat_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{chat_id}/messages", response_model=list[MessageRead])
-async def list_messages(chat_id: int, db: AsyncSession = Depends(get_db)):
+async def list_messages(
+    chat_id: int,
+    limit: Optional[int] = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
     chat = await db.get(Chat, chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    result = await db.execute(
+    q = (
         select(Message)
         .where(Message.chat_id == chat_id)
         .options(selectinload(Message.generated_images))
         .order_by(Message.created_at)
+        .offset(offset)
     )
+    if limit is not None:
+        q = q.limit(limit)
+    result = await db.execute(q)
     return result.scalars().all()

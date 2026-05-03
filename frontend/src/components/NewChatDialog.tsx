@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { XIcon, SparklesIcon } from "lucide-react";
 import { api } from "../lib/api";
@@ -15,10 +15,20 @@ const PROVIDER_ICONS: Record<string, string> = {
   anthropic: "🟠",
 };
 
+const LAST_PROVIDER_KEY = "simplechat_last_provider";
+
+function getLastProvider(): "openai" | "anthropic" {
+  try {
+    const v = localStorage.getItem(LAST_PROVIDER_KEY);
+    if (v === "openai" || v === "anthropic") return v;
+  } catch {}
+  return "anthropic";
+}
+
 export default function NewChatDialog({ onCreated, onClose }: Props) {
   const qc = useQueryClient();
-  const [provider, setProvider] = useState<"openai" | "anthropic">("anthropic");
-  const [model, setModel] = useState("claude-sonnet-4-6");
+  const [provider, setProvider] = useState<"openai" | "anthropic">(getLastProvider);
+  const [model, setModel] = useState("");
 
   const { data: remoteModels } = useQuery({
     queryKey: ["models"],
@@ -26,12 +36,19 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
     staleTime: 3_600_000, // 1 hour
   });
 
-  // use live models from API, fall back to hardcoded list while loading
   const modelsFor = (p: "openai" | "anthropic") => {
     const live = remoteModels?.[p];
     if (live?.length) return live.map((m) => ({ label: m.label, value: m.id }));
     return MODELS[p];
   };
+
+  // sync model when provider or remote models change
+  useEffect(() => {
+    const options = modelsFor(provider);
+    if (!model || !options.find((o) => o.value === model)) {
+      setModel(options[0]?.value ?? "");
+    }
+  }, [provider, remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
     mutationFn: () => api.createChat(provider, model),
@@ -43,8 +60,17 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
 
   function handleProviderChange(p: "openai" | "anthropic") {
     setProvider(p);
-    setModel(modelsFor(p)[0].value);
+    try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch {}
+    const options = modelsFor(p);
+    setModel(options[0]?.value ?? "");
   }
+
+  // close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   const options = modelsFor(provider);
 
@@ -123,7 +149,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
           {/* create button */}
           <button
             onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !model}
             className="w-full py-2.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-accent/20 mt-1"
             data-testid="create-chat-button"
           >
@@ -131,7 +157,9 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
           </button>
 
           {mutation.isError && (
-            <p className="text-sm text-red-400 text-center">{String(mutation.error)}</p>
+            <p className="text-sm text-red-400 text-center">
+              {mutation.error instanceof Error ? mutation.error.message : "Failed to create chat"}
+            </p>
           )}
         </div>
       </div>

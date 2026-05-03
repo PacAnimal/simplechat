@@ -11,6 +11,9 @@ from .model_registry import refresh as refresh_models
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    os.makedirs(settings.uploads_dir, exist_ok=True)
+    os.makedirs(settings.generated_dir, exist_ok=True)
+    os.makedirs("./data", exist_ok=True)
     await init_db()
     try:
         await refresh_models()

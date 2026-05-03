@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import AsyncIterator
 from openai import AsyncOpenAI
@@ -5,11 +6,17 @@ from .base import StreamEvent, ChatMessage, GENERATE_IMAGE_TOOL, WEB_SEARCH_TOOL
 from ..tools.image_gen import generate_image as _generate_image
 from ..config import settings
 
+MAX_TOOL_ITERATIONS = 10
+
 
 async def _web_search(query: str) -> str:
     try:
         from duckduckgo_search import DDGS
-        results = list(DDGS().text(query, max_results=6))
+
+        def _sync():
+            return list(DDGS().text(query, max_results=6))
+
+        results = await asyncio.to_thread(_sync)
         if not results:
             return "No results found."
         lines = []
@@ -28,6 +35,8 @@ async def _execute_tool(name: str, args: dict) -> dict:
 
 class OpenAIProvider:
     def __init__(self):
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not configured")
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     async def stream_chat(
@@ -51,8 +60,14 @@ class OpenAIProvider:
             tools.append({"type": "function", "function": WEB_SEARCH_TOOL_OPENAI})
 
         current_messages = list(messages)
+        iteration = 0
 
         while True:
+            iteration += 1
+            if iteration > MAX_TOOL_ITERATIONS:
+                yield {"type": "error", "message": "Tool loop exceeded maximum iterations"}
+                break
+
             tool_call_accum: dict[int, dict] = {}
 
             stream = await self.client.chat.completions.create(

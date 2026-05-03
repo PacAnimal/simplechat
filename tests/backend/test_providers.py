@@ -174,3 +174,112 @@ async def test_anthropic_stream_web_search_event():
 
     assert any(e["type"] == "searching" for e in events)
     assert any(e["type"] == "text_delta" for e in events)
+
+
+# ---- Optional API key guard ----
+
+async def test_openai_provider_raises_without_key():
+    import backend.providers.openai_provider as m
+    original = m.settings.openai_api_key
+    m.settings.openai_api_key = None
+    try:
+        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            m.OpenAIProvider()
+    finally:
+        m.settings.openai_api_key = original
+
+
+async def test_anthropic_provider_raises_without_key():
+    import backend.providers.anthropic_provider as m
+    original = m.settings.anthropic_api_key
+    m.settings.anthropic_api_key = None
+    try:
+        with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+            m.AnthropicProvider()
+    finally:
+        m.settings.anthropic_api_key = original
+
+
+# ---- Max tool iterations ----
+
+async def test_openai_stream_max_iterations_guard():
+    """Provider must stop after MAX_TOOL_ITERATIONS and yield an error event."""
+    from backend.providers.openai_provider import OpenAIProvider, MAX_TOOL_ITERATIONS
+
+    tc_chunk = MagicMock()
+    tc_chunk.choices = [MagicMock()]
+    tc_chunk.choices[0].delta.content = None
+    tc_delta = MagicMock()
+    tc_delta.index = 0
+    tc_delta.id = "call_loop"
+    tc_delta.function.name = "generate_image"
+    tc_delta.function.arguments = '{"prompt":"loop"}'
+    tc_chunk.choices[0].delta.tool_calls = [tc_delta]
+
+    async def fake_create(**kwargs):
+        async def gen():
+            yield tc_chunk
+        return gen()
+
+    fake_result = {"path": "/tmp/x.png", "url": "/generated/x.png", "prompt": "loop", "text": "Done."}
+
+    provider = OpenAIProvider()
+    with (
+        patch.object(provider.client.chat.completions, "create", new=fake_create),
+        patch("backend.providers.openai_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+    ):
+        events = []
+        async for event in provider._stream([{"role": "user", "content": "Loop"}], "gpt-4o", False):
+            events.append(event)
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert "maximum iterations" in error_events[0]["message"]
+    # should have called the tool exactly MAX_TOOL_ITERATIONS times
+    tool_starts = [e for e in events if e["type"] == "tool_start"]
+    assert len(tool_starts) == MAX_TOOL_ITERATIONS
+
+
+async def test_anthropic_stream_max_iterations_guard():
+    """Anthropic provider must also stop after MAX_TOOL_ITERATIONS."""
+    from backend.providers.anthropic_provider import AnthropicProvider, MAX_TOOL_ITERATIONS
+
+    # build a stream that always returns a tool_use block
+    def make_tool_events():
+        return [
+            MagicMock(type="content_block_start", content_block=MagicMock(
+                type="tool_use", id="tc_0", name="generate_image",
+            )),
+            MagicMock(type="content_block_delta", delta=MagicMock(
+                type="input_json_delta", partial_json='{"prompt":"loop"}',
+            )),
+            MagicMock(type="content_block_stop"),
+        ]
+
+    async def async_iter(items):
+        for item in items:
+            yield item
+
+    def make_mock_stream():
+        ms = AsyncMock()
+        ms.__aenter__ = AsyncMock(return_value=ms)
+        ms.__aexit__ = AsyncMock(return_value=False)
+        ms.__aiter__ = lambda self: async_iter(make_tool_events())
+        return ms
+
+    fake_result = {"path": "/tmp/x.png", "url": "/generated/x.png", "prompt": "loop", "text": "Done."}
+
+    provider = AnthropicProvider()
+    with (
+        patch.object(provider.client.messages, "stream", side_effect=lambda **kw: make_mock_stream()),
+        patch("backend.providers.anthropic_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+    ):
+        events = []
+        async for event in provider._stream([{"role": "user", "content": "Loop"}], "claude-sonnet-4-6", False):
+            events.append(event)
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert "maximum iterations" in error_events[0]["message"]
+    tool_starts = [e for e in events if e["type"] == "tool_start"]
+    assert len(tool_starts) == MAX_TOOL_ITERATIONS

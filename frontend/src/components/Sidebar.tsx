@@ -15,6 +15,7 @@ interface Props {
 export default function Sidebar({ selectedChatId, onSelectChat, onNewChat }: Props) {
   const qc = useQueryClient();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: chats = [] } = useQuery({
     queryKey: ["chats"],
@@ -24,12 +25,25 @@ export default function Sidebar({ selectedChatId, onSelectChat, onNewChat }: Pro
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteChat,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chats"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chats"] });
+      setConfirmDeleteId(null);
+    },
   });
 
-  function handleDelete(e: React.MouseEvent, chat: Chat) {
+  function handleDeleteClick(e: React.MouseEvent, chat: Chat) {
     e.stopPropagation();
-    deleteMutation.mutate(chat.id);
+    setConfirmDeleteId(chat.id);
+  }
+
+  function handleConfirmDelete(e: React.MouseEvent, id: number) {
+    e.stopPropagation();
+    deleteMutation.mutate(id);
+  }
+
+  function handleCancelDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    setConfirmDeleteId(null);
   }
 
   return (
@@ -89,15 +103,35 @@ export default function Sidebar({ selectedChatId, onSelectChat, onNewChat }: Pro
                     {PROVIDER_LABELS[chat.provider]} · {shortModel(chat.model)}
                   </p>
                 </div>
-                {(hoveredId === chat.id || selectedChatId === chat.id) && (
-                  <button
-                    onClick={(e) => handleDelete(e, chat)}
-                    className="flex-shrink-0 p-1 rounded hover:text-red-400 text-muted transition-colors opacity-60 hover:opacity-100"
-                    title="Delete"
-                    data-testid={`delete-chat-${chat.id}`}
-                  >
-                    <Trash2Icon size={13} />
-                  </button>
+
+                {confirmDeleteId === chat.id ? (
+                  <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[0.65rem] text-muted">Delete?</span>
+                    <button
+                      onClick={(e) => handleConfirmDelete(e, chat.id)}
+                      className="text-[0.65rem] text-red-400 hover:text-red-300 font-medium px-1"
+                      data-testid={`confirm-delete-${chat.id}`}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={handleCancelDelete}
+                      className="text-[0.65rem] text-muted hover:text-primary font-medium px-1"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  (hoveredId === chat.id || selectedChatId === chat.id) && (
+                    <button
+                      onClick={(e) => handleDeleteClick(e, chat)}
+                      className="flex-shrink-0 p-1 rounded hover:text-red-400 text-muted transition-colors opacity-60 hover:opacity-100"
+                      title="Delete"
+                      data-testid={`delete-chat-${chat.id}`}
+                    >
+                      <Trash2Icon size={13} />
+                    </button>
+                  )
                 )}
               </button>
             ))}

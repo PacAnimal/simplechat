@@ -97,3 +97,36 @@ async def test_list_messages_empty(client: AsyncClient):
 async def test_list_messages_for_missing_chat(client: AsyncClient):
     r = await client.get("/api/chats/99999/messages")
     assert r.status_code == 404
+
+
+async def test_list_chats_pagination_limit(client: AsyncClient):
+    for _ in range(5):
+        await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r = await client.get("/api/chats?limit=3")
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+async def test_list_chats_pagination_offset(client: AsyncClient):
+    for _ in range(5):
+        await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r_all = await client.get("/api/chats")
+    all_ids = [c["id"] for c in r_all.json()]
+
+    r = await client.get("/api/chats?limit=2&offset=2")
+    assert r.status_code == 200
+    page_ids = [c["id"] for c in r.json()]
+    assert page_ids == all_ids[2:4]
+
+
+async def test_list_chats_no_params_returns_all(client: AsyncClient):
+    for _ in range(3):
+        await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r = await client.get("/api/chats")
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+async def test_list_chats_invalid_limit(client: AsyncClient):
+    r = await client.get("/api/chats?limit=0")
+    assert r.status_code == 422

@@ -5,6 +5,8 @@ from .base import StreamEvent, ChatMessage, GENERATE_IMAGE_TOOL
 from ..tools.image_gen import generate_image as _generate_image
 from ..config import settings
 
+MAX_TOOL_ITERATIONS = 10
+
 _ANTHROPIC_IMAGE_TOOL = {
     "name": GENERATE_IMAGE_TOOL["name"],
     "description": GENERATE_IMAGE_TOOL["description"],
@@ -25,6 +27,8 @@ async def _execute_tool(name: str, args: dict) -> dict:
 
 class AnthropicProvider:
     def __init__(self):
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is not configured")
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def stream_chat(
@@ -46,8 +50,14 @@ class AnthropicProvider:
             tools.append(_WEB_SEARCH_TOOL)
 
         current_messages = list(messages)
+        iteration = 0
 
         while True:
+            iteration += 1
+            if iteration > MAX_TOOL_ITERATIONS:
+                yield {"type": "error", "message": "Tool loop exceeded maximum iterations"}
+                break
+
             content_blocks: list[dict] = []
             current_block: dict | None = None
             custom_tool_calls: list[dict] = []

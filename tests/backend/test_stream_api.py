@@ -139,3 +139,48 @@ async def test_stream_image_generation(client: AsyncClient):
     image_events = [e for e in events if e["type"] == "image_generated"]
     assert len(image_events) == 1
     assert image_events[0]["url"] == "/generated/test.png"
+
+
+async def test_stream_updates_chat_updated_at(client: AsyncClient):
+    """updated_at must be bumped after every exchange, even when title is already set."""
+    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "fixed"})
+    chat_id = create.json()["id"]
+    before = create.json()["updated_at"]
+
+    async def mock_stream(self, messages, model, web_search):
+        yield {"type": "text_delta", "content": "ok"}
+
+    with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
+        async with client.stream(
+            "POST",
+            f"/api/chats/{chat_id}/messages",
+            json={"content": "hello"},
+        ) as response:
+            async for _ in response.aiter_lines():
+                pass
+
+    chat = (await client.get(f"/api/chats/{chat_id}")).json()
+    assert chat["updated_at"] != before
+
+
+async def test_stream_error_event_on_provider_failure(client: AsyncClient):
+    """A provider exception must produce an SSE error event, not a 500."""
+    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    chat_id = create.json()["id"]
+
+    async def mock_stream(self, messages, model, web_search):
+        raise RuntimeError("provider exploded")
+        yield  # make it a generator
+
+    with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
+        async with client.stream(
+            "POST",
+            f"/api/chats/{chat_id}/messages",
+            json={"content": "hello"},
+        ) as response:
+            assert response.status_code == 200
+            events = await _collect_sse(response)
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert "provider exploded" in error_events[0]["message"]
