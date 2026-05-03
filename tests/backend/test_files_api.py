@@ -94,7 +94,6 @@ async def test_delete_chat_removes_uploaded_file(client: AsyncClient):
         files={"file": ("hello.txt", b"Hello world", "text/plain")},
     )
     assert r.status_code == 200
-    att_id = r.json()["id"]
 
     # retrieve current file list to find the on-disk path via the list endpoint
     files_r = await client.get(f"/api/chats/{chat_id}/files")

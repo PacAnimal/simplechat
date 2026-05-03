@@ -1,6 +1,7 @@
 """Tests for the reset endpoint access control."""
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 from fastapi import HTTPException
 
 pytestmark = pytest.mark.asyncio

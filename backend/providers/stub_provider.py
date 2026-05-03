@@ -5,9 +5,10 @@ Returns canned responses without calling any real AI API.
 import asyncio
 import base64
 import os
-from typing import AsyncIterator
-from .base import StreamEvent, ChatMessage
+from collections.abc import AsyncIterator
+
 from ..config import settings
+from .base import ChatMessage, StreamEvent
 
 # 1x1 placeholder PNG
 _PLACEHOLDER_PNG = base64.b64decode(

@@ -1,6 +1,6 @@
-import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 pytestmark = pytest.mark.asyncio
 
@@ -238,7 +238,7 @@ async def test_anthropic_unknown_block_type_does_not_corrupt_output():
 
 async def test_openai_stream_max_iterations_guard():
     """Provider must stop after MAX_TOOL_ITERATIONS and yield an error event."""
-    from backend.providers.openai_provider import OpenAIProvider, MAX_TOOL_ITERATIONS
+    from backend.providers.openai_provider import MAX_TOOL_ITERATIONS, OpenAIProvider
 
     tc_chunk = MagicMock()
     tc_chunk.choices = [MagicMock()]
@@ -276,7 +276,10 @@ async def test_openai_stream_max_iterations_guard():
 
 async def test_anthropic_stream_max_iterations_guard():
     """Anthropic provider must also stop after MAX_TOOL_ITERATIONS."""
-    from backend.providers.anthropic_provider import AnthropicProvider, MAX_TOOL_ITERATIONS
+    from backend.providers.anthropic_provider import (
+        MAX_TOOL_ITERATIONS,
+        AnthropicProvider,
+    )
 
     # build a stream that always returns a tool_use block
     def make_tool_events():

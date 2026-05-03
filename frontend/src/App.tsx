@@ -1,13 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
 import NewChatDialog from "./components/NewChatDialog";
-import type { Chat } from "./types";
+import ProfilePicker from "./components/ProfilePicker";
+import { clearToken, getStoredProfile } from "./lib/api";
+import type { Chat, Profile } from "./types";
 
 export default function App() {
+  const [profile, setProfile] = useState<Profile | null>(() => getStoredProfile());
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | undefined>(undefined);
+
+  // listen for 401 events from api.ts
+  useEffect(() => {
+    function handleUnauthorized() {
+      setProfile(null);
+      setSelectedChatId(null);
+    }
+    window.addEventListener("simplechat:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("simplechat:unauthorized", handleUnauthorized);
+  }, []);
+
+  function handleLogin(p: Profile) {
+    setProfile(p);
+    setSelectedChatId(null);
+  }
+
+  function handleLogout() {
+    clearToken();
+    setProfile(null);
+    setSelectedChatId(null);
+  }
+
+  function handleProfileUpdated(p: Profile) {
+    setProfile(p);
+  }
+
+  if (!profile) {
+    return <ProfilePicker onLogin={handleLogin} />;
+  }
 
   function handleNewChat(initialMessage?: string) {
     setPendingMessage(initialMessage);
@@ -22,9 +54,12 @@ export default function App() {
   return (
     <div className="flex h-full bg-canvas text-primary">
       <Sidebar
+        profile={profile}
         selectedChatId={selectedChatId}
         onSelectChat={setSelectedChatId}
         onNewChat={() => handleNewChat()}
+        onLogout={handleLogout}
+        onProfileUpdated={handleProfileUpdated}
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-canvas">

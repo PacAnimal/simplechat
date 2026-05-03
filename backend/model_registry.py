@@ -1,8 +1,10 @@
-import re
 import asyncio
+import re
 import time
-from openai import AsyncOpenAI
+
 import anthropic
+from openai import AsyncOpenAI
+
 from .config import settings
 from .schemas import PROVIDER_DEFAULTS
 

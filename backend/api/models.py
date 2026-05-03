@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from ..model_registry import get_models
 
 router = APIRouter(prefix="", tags=["models"])

@@ -1,8 +1,10 @@
 import os
 import uuid
+
 import aiofiles
 import httpx
 from openai import AsyncOpenAI
+
 from ..config import settings
 
 
@@ -34,5 +36,5 @@ async def generate_image(prompt: str, size: str = "1024x1024") -> dict:
         "path": dest_path,
         "url": f"/generated/{filename}",
         "prompt": prompt,
-        "text": f"I've generated the image. It will be displayed inline.",
+        "text": "I've generated the image. It will be displayed inline.",
     }

@@ -1,3 +1,10 @@
+export interface Profile {
+  id: number;
+  name: string;
+  avatar: number;
+  created_at: string;
+}
+
 export interface Chat {
   id: number;
   title: string;
@@ -66,3 +73,56 @@ export const MODELS: Record<string, { label: string; value: string }[]> = {
     { label: "Claude Haiku 4.5", value: "claude-haiku-4-5-20251001" },
   ],
 };
+
+export const AVATARS: { emoji: string; bg: string }[] = [
+  { emoji: "🦊", bg: "#c2410c" },
+  { emoji: "🐻", bg: "#78350f" },
+  { emoji: "🐱", bg: "#b45309" },
+  { emoji: "🐶", bg: "#92400e" },
+  { emoji: "🐼", bg: "#374151" },
+  { emoji: "🦁", bg: "#a16207" },
+  { emoji: "🐯", bg: "#c2410c" },
+  { emoji: "🦋", bg: "#6d28d9" },
+  { emoji: "🐸", bg: "#065f46" },
+  { emoji: "🦄", bg: "#9d174d" },
+  { emoji: "🐲", bg: "#0f766e" },
+  { emoji: "🦅", bg: "#1d4ed8" },
+  { emoji: "🐺", bg: "#4c1d95" },
+  { emoji: "🦑", bg: "#0369a1" },
+  { emoji: "🦩", bg: "#be185d" },
+  { emoji: "🦜", bg: "#166534" },
+  { emoji: "🐙", bg: "#7e22ce" },
+  { emoji: "🦈", bg: "#075985" },
+  { emoji: "🦝", bg: "#3f3f46" },
+  { emoji: "🐉", bg: "#991b1b" },
+  { emoji: "🦘", bg: "#b45309" },
+  { emoji: "🦔", bg: "#6b3a2a" },
+  { emoji: "🦦", bg: "#7c4f1a" },
+  { emoji: "🦫", bg: "#5b3a12" },
+  { emoji: "🦥", bg: "#7d6149" },
+  { emoji: "🦚", bg: "#0d6e72" },
+  { emoji: "🦉", bg: "#6b4c1e" },
+  { emoji: "🐢", bg: "#3a6b35" },
+  { emoji: "🐊", bg: "#4a6741" },
+  { emoji: "🐋", bg: "#1e3a8a" },
+  { emoji: "🦭", bg: "#334155" },
+  { emoji: "🐘", bg: "#4b5563" },
+  { emoji: "🦒", bg: "#9a6d1e" },
+  { emoji: "🦌", bg: "#7c4a1e" },
+  { emoji: "🦇", bg: "#3b0764" },
+  { emoji: "🐝", bg: "#92400e" },
+  { emoji: "🐞", bg: "#991b1b" },
+  { emoji: "🐠", bg: "#c2410c" },
+  { emoji: "🦞", bg: "#be123c" },
+  { emoji: "🦀", bg: "#b91c1c" },
+  { emoji: "🐬", bg: "#0c4a6e" },
+  { emoji: "🐓", bg: "#7c2d12" },
+  { emoji: "🐿️", bg: "#6b3a1a" },
+  { emoji: "🐪", bg: "#a16207" },
+  { emoji: "🦏", bg: "#57534e" },
+  { emoji: "🐎", bg: "#422006" },
+  { emoji: "🐖", bg: "#be185d" },
+  { emoji: "🐇", bg: "#1e3a5f" },
+  { emoji: "🦗", bg: "#365314" },
+  { emoji: "🐡", bg: "#0369a1" },
+];

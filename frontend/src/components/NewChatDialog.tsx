@@ -21,7 +21,7 @@ function getLastProvider(): "openai" | "anthropic" {
   try {
     const v = localStorage.getItem(LAST_PROVIDER_KEY);
     if (v === "openai" || v === "anthropic") return v;
-  } catch {}
+  } catch { /* localStorage unavailable (e.g. private browsing) */ }
   return "anthropic";
 }
 
@@ -46,7 +46,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   useEffect(() => {
     const options = modelsFor(provider);
     if (!model || !options.find((o) => o.value === model)) {
-      setModel(options[0]?.value ?? "");
+      setModel(options[0]?.value ?? ""); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [provider, remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -60,7 +60,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
 
   function handleProviderChange(p: "openai" | "anthropic") {
     setProvider(p);
-    try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch {}
+    try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch { /* ignore */ }
     const options = modelsFor(p);
     setModel(options[0]?.value ?? "");
   }

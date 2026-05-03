@@ -31,7 +31,7 @@ export default function MessageInput({
   // sync initial value when it first arrives (suggestion card path)
   useEffect(() => {
     if (initialValue) {
-      setText(initialValue);
+      setText(initialValue); // eslint-disable-line react-hooks/set-state-in-effect
       if (textareaRef.current) {
         const el = textareaRef.current;
         el.style.height = "auto";

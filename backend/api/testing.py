@@ -1,10 +1,11 @@
 """Test-only endpoints. Only mounted when STUB_PROVIDERS=true or ALLOW_RESET=true."""
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
-from ..database import get_db
-from ..models import Chat, Message, Attachment, GeneratedImage
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..config import settings
+from ..database import get_db
+from ..models import Attachment, Chat, GeneratedImage, Message, Profile
 
 router = APIRouter(prefix="/test", tags=["test"])
 
@@ -21,4 +22,5 @@ async def reset_db(
     await db.execute(delete(Attachment))
     await db.execute(delete(Message))
     await db.execute(delete(Chat))
+    await db.execute(delete(Profile))
     await db.commit()

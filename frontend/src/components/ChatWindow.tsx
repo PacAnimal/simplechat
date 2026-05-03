@@ -6,7 +6,6 @@ import type { Message, ToolCallRecord } from "../types";
 import { PROVIDER_LABELS } from "../types";
 import MessageBubble, { StreamingBubble, ThinkingBubble, ToolCallsBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
-import { cn } from "../lib/utils";
 
 interface Props {
   chatId: number;

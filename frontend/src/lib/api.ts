@@ -1,14 +1,53 @@
-import type { Chat, Message, Attachment, StreamEvent } from "../types";
+import type { Attachment, Chat, Message, Profile, StreamEvent } from "../types";
 
 const BASE = "/api";
+const TOKEN_KEY = "simplechat_token";
+const PROFILE_KEY = "simplechat_profile";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(PROFILE_KEY);
+}
+
+export function getStoredProfile(): Profile | null {
+  const raw = localStorage.getItem(PROFILE_KEY);
+  try {
+    return raw ? (JSON.parse(raw) as Profile) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeProfile(profile: Profile): void {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}`, ...extra } : extra;
+}
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers = authHeaders(body ? { "Content-Type": "application/json" } : {});
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      window.dispatchEvent(new Event("simplechat:unauthorized"));
+      throw new Error("UNAUTHORIZED");
+    }
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`${res.status}: ${text}`);
   }
@@ -17,7 +56,22 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
+  // profiles (no auth required)
+  listProfiles: () => req<Profile[]>("GET", "/profiles"),
+  createProfile: (name: string, password: string, avatar: number) =>
+    req<Profile>("POST", "/profiles", { name, password, avatar }),
+  loginProfile: (profileId: number, password: string) =>
+    req<{ token: string; profile: Profile }>("POST", `/profiles/${profileId}/login`, { password }),
+  deleteProfile: (profileId: number) => req<void>("DELETE", `/profiles/${profileId}`),
+  updateAvatar: (profileId: number, avatar: number) =>
+    req<Profile>("PATCH", `/profiles/${profileId}/avatar`, { avatar }),
+  changePassword: (profileId: number, current_password: string, new_password: string) =>
+    req<void>("POST", `/profiles/${profileId}/change-password`, { current_password, new_password }),
+
+  // models
   getModels: () => req<Record<string, { id: string; label: string }[]>>("GET", "/models"),
+
+  // chats
   listChats: () => req<Chat[]>("GET", "/chats"),
   getChat: (id: number) => req<Chat>("GET", `/chats/${id}`),
   createChat: (provider: string, model: string, title?: string) =>
@@ -28,8 +82,17 @@ export const api = {
   uploadFile: async (chatId: number, file: File): Promise<Attachment> => {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`${BASE}/chats/${chatId}/files`, { method: "POST", body: form });
+    const res = await fetch(`${BASE}/chats/${chatId}/files`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
     if (!res.ok) {
+      if (res.status === 401) {
+        clearToken();
+        window.dispatchEvent(new Event("simplechat:unauthorized"));
+        throw new Error("UNAUTHORIZED");
+      }
       const text = await res.text().catch(() => res.statusText);
       throw new Error(`${res.status}: ${text}`);
     }
@@ -45,14 +108,20 @@ export async function* streamMessage(
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${BASE}/chats/${chatId}/messages`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ content, attachment_ids: attachmentIds }),
     signal,
   });
 
-  if (!res.ok || !res.body) {
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      window.dispatchEvent(new Event("simplechat:unauthorized"));
+      throw new Error("UNAUTHORIZED");
+    }
     throw new Error(`Stream failed: ${res.status}`);
   }
+  if (!res.body) throw new Error("Stream failed: no body");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

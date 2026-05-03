@@ -1,9 +1,11 @@
 import json
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+
 import anthropic
-from .base import StreamEvent, ChatMessage, GENERATE_IMAGE_TOOL
-from ..tools.image_gen import generate_image as _generate_image
+
 from ..config import settings
+from ..tools.image_gen import generate_image as _generate_image
+from .base import GENERATE_IMAGE_TOOL, ChatMessage, StreamEvent
 
 MAX_TOOL_ITERATIONS = 10
 

@@ -1,11 +1,13 @@
 import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .database import run_migrations
+from fastapi.staticfiles import StaticFiles
+
 from .api.router import router
 from .config import settings
+from .database import run_migrations
 from .model_registry import refresh as refresh_models
 
 

@@ -2,17 +2,22 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon } from "lucide-react";
 import { api } from "../lib/api";
-import type { Chat } from "../types";
+import type { Chat, Profile } from "../types";
 import { PROVIDER_LABELS } from "../types";
 import { cn } from "../lib/utils";
+import { Avatar } from "./ProfilePicker";
+import ProfileSettingsMenu from "./ProfileSettingsMenu";
 
 interface Props {
+  profile: Profile;
   selectedChatId: number | null;
   onSelectChat: (id: number) => void;
   onNewChat: () => void;
+  onLogout: () => void;
+  onProfileUpdated: (profile: Profile) => void;
 }
 
-export default function Sidebar({ selectedChatId, onSelectChat, onNewChat }: Props) {
+export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated }: Props) {
   const qc = useQueryClient();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -138,6 +143,18 @@ export default function Sidebar({ selectedChatId, onSelectChat, onNewChat }: Pro
           </>
         )}
       </nav>
+
+      {/* profile footer */}
+      <div className="mx-3 border-t border-border" />
+      <div className="flex items-center gap-2.5 px-3 py-3">
+        <Avatar profile={profile} size="sm" />
+        <span className="flex-1 text-sm font-medium text-primary truncate">{profile.name}</span>
+        <ProfileSettingsMenu
+          profile={profile}
+          onProfileUpdated={onProfileUpdated}
+          onLogout={onLogout}
+        />
+      </div>
     </aside>
   );
 }

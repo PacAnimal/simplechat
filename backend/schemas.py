@@ -1,23 +1,22 @@
 import os
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, model_validator
 
+from pydantic import BaseModel, Field, model_validator
 
 PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6"}
 
 
 class ChatCreate(BaseModel):
     provider: str = Field(..., pattern="^(openai|anthropic)$")
-    model: Optional[str] = None
-    title: Optional[str] = None  # None means no explicit title; auto-title will apply
+    model: str | None = None
+    title: str | None = None  # None means no explicit title; auto-title will apply
 
 
 class ChatUpdate(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=255)
-    web_search_enabled: Optional[bool] = None
-    model: Optional[str] = None
-    provider: Optional[str] = Field(default=None, pattern="^(openai|anthropic)$")
+    title: str | None = Field(default=None, max_length=255)
+    web_search_enabled: bool | None = None
+    model: str | None = None
+    provider: str | None = Field(default=None, pattern="^(openai|anthropic)$")
 
     @model_validator(mode="after")
     def model_requires_provider(self) -> "ChatUpdate":
@@ -66,7 +65,7 @@ class MessageRead(BaseModel):
 class AttachmentRead(BaseModel):
     id: int
     chat_id: int
-    message_id: Optional[int]
+    message_id: int | None
     filename: str
     mime_type: str
     size: int
@@ -78,7 +77,7 @@ class AttachmentRead(BaseModel):
 class GeneratedImageRead(BaseModel):
     id: int
     chat_id: int
-    message_id: Optional[int]
+    message_id: int | None
     prompt: str
     path: str
     created_at: datetime
@@ -89,3 +88,36 @@ class GeneratedImageRead(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str
     attachment_ids: list[int] = []
+
+
+class ProfileCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=1)
+    avatar: int = Field(default=0, ge=0, le=99)
+
+
+class ProfileRead(BaseModel):
+    id: int
+    name: str
+    avatar: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    profile: ProfileRead
+
+
+class ProfileAvatarUpdate(BaseModel):
+    avatar: int = Field(..., ge=0, le=99)
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=1)

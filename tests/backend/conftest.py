@@ -1,8 +1,9 @@
 import os
-import pytest
+
+import httpx
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # use in-memory SQLite for tests
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-openai")
@@ -32,15 +33,46 @@ async def setup_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest_asyncio.fixture
-async def client():
-    async def override_get_db():
+def _override_get_db():
+    async def override():
         async with TestSession() as session:
             yield session
+    return override
 
-    app.dependency_overrides[get_db] = override_get_db
 
+class BearerAuth(httpx.Auth):
+    """Attaches an Authorization: Bearer header to every request."""
+    def __init__(self, token: str):
+        self.token = token
+
+    def auth_flow(self, request: httpx.Request):
+        request.headers["Authorization"] = f"Bearer {self.token}"
+        yield request
+
+
+async def _register_and_login(c: AsyncClient, name: str, password: str) -> tuple[int, str]:
+    """Create a profile and return (profile_id, token)."""
+    r = await c.post("/api/profiles", json={"name": name, "password": password, "avatar": 0})
+    assert r.status_code == 201, r.text
+    profile_id = r.json()["id"]
+    login_r = await c.post(f"/api/profiles/{profile_id}/login", json={"password": password})
+    assert login_r.status_code == 200, login_r.text
+    return profile_id, login_r.json()["token"]
+
+
+@pytest_asyncio.fixture
+async def unauthed_client():
+    """Raw client with no auth headers — used for testing auth-layer behaviour."""
+    app.dependency_overrides[get_db] = _override_get_db()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
-
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def client(unauthed_client: AsyncClient):
+    """Authenticated client pre-logged in as 'testuser'."""
+    _, token = await _register_and_login(unauthed_client, "testuser", "testpass")
+    unauthed_client.auth = BearerAuth(token)
+    yield unauthed_client
+    unauthed_client.auth = None

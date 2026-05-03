@@ -1,10 +1,12 @@
 import asyncio
 import json
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+
 from openai import AsyncOpenAI
-from .base import StreamEvent, ChatMessage, GENERATE_IMAGE_TOOL, WEB_SEARCH_TOOL_OPENAI
-from ..tools.image_gen import generate_image as _generate_image
+
 from ..config import settings
+from ..tools.image_gen import generate_image as _generate_image
+from .base import GENERATE_IMAGE_TOOL, WEB_SEARCH_TOOL_OPENAI, ChatMessage, StreamEvent
 
 MAX_TOOL_ITERATIONS = 10
 
