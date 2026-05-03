@@ -1,0 +1,12 @@
+services:
+  simplechat:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./generated:/app/generated
+    env_file:
+      - .env
+    restart: unless-stopped
