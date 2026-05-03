@@ -74,7 +74,7 @@ async def change_password(
     if current.id != profile_id:
         raise HTTPException(403, "Cannot change another profile's password")
     if not verify_password(body.current_password, current.password_hash):
-        raise HTTPException(401, "Current password is incorrect")
+        raise HTTPException(400, "Current password is incorrect")
     current.password_hash = hash_password(body.new_password)
     await db.commit()
 

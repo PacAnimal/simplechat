@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 from fastapi import Depends, Header, HTTPException
+from jwt.exceptions import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -39,7 +40,7 @@ async def get_current_profile(
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[_ALGORITHM])
         profile_id = int(payload["sub"])
-    except Exception:
+    except (PyJWTError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     profile = await db.get(Profile, profile_id)
     if not profile:

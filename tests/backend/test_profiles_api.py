@@ -387,7 +387,7 @@ async def test_change_password_wrong_current_rejected(unauthed_client: AsyncClie
         json={"current_password": "wrong", "new_password": "newpass"},
         headers=headers,
     )
-    assert r.status_code == 401
+    assert r.status_code == 400
 
 
 async def test_can_delete_own_profile(unauthed_client: AsyncClient):

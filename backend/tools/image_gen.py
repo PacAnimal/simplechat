@@ -9,6 +9,8 @@ from ..config import settings
 
 
 async def generate_image(prompt: str, size: str = "1024x1024") -> dict:
+    if not settings.openai_api_key:
+        raise ValueError("OPENAI_API_KEY is not configured")
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     valid_sizes = {"1024x1024", "1792x1024", "1024x1792"}

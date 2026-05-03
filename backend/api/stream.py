@@ -2,7 +2,7 @@ import json
 import logging
 
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
 from ..providers import AnthropicProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
 from ..schemas import SendMessageRequest
+from .deps import get_owned_chat
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +65,8 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
     return out
 
 
-async def _event_stream(chat_id: int, profile_id: int, user_content: str, attachment_ids: list[int], db: AsyncSession):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile_id:
-        yield f"data: {json.dumps({'type': 'error', 'message': 'Chat not found'})}\n\n"
-        return
+async def _event_stream(chat: Chat, user_content: str, attachment_ids: list[int], db: AsyncSession):
+    chat_id = chat.id
 
     # save user message
     user_msg = Message(chat_id=chat_id, role="user", content=user_content)
@@ -145,12 +143,10 @@ async def send_message(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile.id:
-        raise HTTPException(404, "Chat not found")
+    chat = await get_owned_chat(chat_id, profile.id, db)
 
     return StreamingResponse(
-        _event_stream(chat_id, profile.id, body.content, body.attachment_ids, db),
+        _event_stream(chat, body.content, body.attachment_ids, db),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

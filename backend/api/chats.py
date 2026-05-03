@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,6 +9,7 @@ from ..auth import get_current_profile
 from ..database import get_db
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile
 from ..schemas import PROVIDER_DEFAULTS, ChatCreate, ChatRead, ChatUpdate, MessageRead
+from .deps import get_owned_chat
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -58,10 +59,7 @@ async def get_chat(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile.id:
-        raise HTTPException(404, "Chat not found")
-    return chat
+    return await get_owned_chat(chat_id, profile.id, db)
 
 
 @router.patch("/{chat_id}", response_model=ChatRead)
@@ -71,9 +69,7 @@ async def update_chat(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile.id:
-        raise HTTPException(404, "Chat not found")
+    chat = await get_owned_chat(chat_id, profile.id, db)
     if body.title is not None:
         chat.title = body.title
         chat.title_is_default = False
@@ -94,12 +90,10 @@ async def delete_chat(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile.id:
-        raise HTTPException(404, "Chat not found")
+    chat = await get_owned_chat(chat_id, profile.id, db)
 
-    att_result = await db.execute(select(Attachment.path).where(Attachment.chat_id == chat_id))
-    img_result = await db.execute(select(GeneratedImage.path).where(GeneratedImage.chat_id == chat_id))
+    att_result = await db.execute(select(Attachment.path).where(Attachment.chat_id == chat.id))
+    img_result = await db.execute(select(GeneratedImage.path).where(GeneratedImage.chat_id == chat.id))
     file_paths = [r[0] for r in att_result.all()] + [r[0] for r in img_result.all()]
 
     await db.delete(chat)
@@ -120,9 +114,7 @@ async def list_messages(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    chat = await db.get(Chat, chat_id)
-    if not chat or chat.profile_id != profile.id:
-        raise HTTPException(404, "Chat not found")
+    await get_owned_chat(chat_id, profile.id, db)
     q = (
         select(Message)
         .where(Message.chat_id == chat_id)

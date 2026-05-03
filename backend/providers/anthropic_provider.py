@@ -4,10 +4,8 @@ from collections.abc import AsyncIterator
 import anthropic
 
 from ..config import settings
-from ..tools.image_gen import generate_image as _generate_image
-from .base import GENERATE_IMAGE_TOOL, ChatMessage, StreamEvent
-
-MAX_TOOL_ITERATIONS = 10
+from .base import GENERATE_IMAGE_TOOL, MAX_TOOL_ITERATIONS, ChatMessage, StreamEvent
+from .base import execute_tool as _execute_tool
 
 _ANTHROPIC_IMAGE_TOOL = {
     "name": GENERATE_IMAGE_TOOL["name"],
@@ -19,12 +17,6 @@ _WEB_SEARCH_TOOL = {
     "type": "web_search_20250305",
     "name": "web_search",
 }
-
-
-async def _execute_tool(name: str, args: dict) -> dict:
-    if name == "generate_image":
-        return await _generate_image(args.get("prompt", ""), args.get("size", "1024x1024"))
-    raise ValueError(f"Unknown tool: {name}")
 
 
 class AnthropicProvider:

@@ -159,7 +159,7 @@ function PasswordPanel({ profile, onDone }: { profile: Profile; onDone: () => vo
       await api.changePassword(profile.id, current, next);
       onDone();
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("401")) {
+      if (err instanceof Error && err.message.startsWith("400:")) {
         setError("Current password is wrong");
       } else {
         setError("Failed to change password");

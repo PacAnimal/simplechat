@@ -33,7 +33,7 @@ export default function ProfilePicker({ onLogin }: Props) {
       storeProfile(res.profile);
       onLogin(res.profile);
     } catch (err: unknown) {
-      setError(err instanceof Error && err.message.includes("401") ? "Wrong password" : "Login failed");
+      setError(err instanceof Error && err.message === "UNAUTHORIZED" ? "Wrong password" : "Login failed");
     } finally {
       setLogging(false);
     }

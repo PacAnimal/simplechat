@@ -1,5 +1,15 @@
 from typing import TypedDict
 
+from ..tools.image_gen import generate_image as _generate_image
+
+MAX_TOOL_ITERATIONS = 10
+
+
+async def execute_tool(name: str, args: dict) -> dict:
+    if name == "generate_image":
+        return await _generate_image(args.get("prompt", ""), args.get("size", "1024x1024"))
+    raise ValueError(f"Unknown tool: {name}")
+
 
 class ChatMessage(TypedDict):
     role: str

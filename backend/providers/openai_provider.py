@@ -5,10 +5,14 @@ from collections.abc import AsyncIterator
 from openai import AsyncOpenAI
 
 from ..config import settings
-from ..tools.image_gen import generate_image as _generate_image
-from .base import GENERATE_IMAGE_TOOL, WEB_SEARCH_TOOL_OPENAI, ChatMessage, StreamEvent
-
-MAX_TOOL_ITERATIONS = 10
+from .base import (
+    GENERATE_IMAGE_TOOL,
+    MAX_TOOL_ITERATIONS,
+    WEB_SEARCH_TOOL_OPENAI,
+    ChatMessage,
+    StreamEvent,
+)
+from .base import execute_tool as _execute_tool
 
 
 async def _web_search(query: str) -> str:
@@ -27,12 +31,6 @@ async def _web_search(query: str) -> str:
         return "\n\n---\n\n".join(lines)
     except Exception as e:
         return f"Search failed: {e}"
-
-
-async def _execute_tool(name: str, args: dict) -> dict:
-    if name == "generate_image":
-        return await _generate_image(args.get("prompt", ""), args.get("size", "1024x1024"))
-    raise ValueError(f"Unknown tool: {name}")
 
 
 class OpenAIProvider:
