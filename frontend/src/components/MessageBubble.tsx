@@ -71,8 +71,8 @@ function ImageGrid({ images }: { images: InlineImage[] }) {
   const [lightbox, setLightbox] = useState<InlineImage | null>(null);
   return (
     <>
-      {images.map((img) => (
-        <div key={img.url} className="mt-4">
+      {images.map((img, i) => (
+        <div key={i} className="mt-4">
           <img
             src={img.url}
             alt={img.prompt}

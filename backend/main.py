@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .database import init_db
+from .database import run_migrations
 from .api.router import router
 from .config import settings
 from .model_registry import refresh as refresh_models
@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.uploads_dir, exist_ok=True)
     os.makedirs(settings.generated_dir, exist_ok=True)
     os.makedirs("./data", exist_ok=True)
-    await init_db()
+    await run_migrations()
     try:
         await refresh_models()
     except Exception:

@@ -82,3 +82,42 @@ async def test_upload_missing_chat(client: AsyncClient):
         files={"file": ("test.txt", b"content", "text/plain")},
     )
     assert r.status_code == 404
+
+
+async def test_delete_chat_removes_uploaded_file(client: AsyncClient):
+    """Uploaded files must be deleted from disk when their chat is deleted."""
+    import os
+    chat_id = await _create_chat(client)
+
+    r = await client.post(
+        f"/api/chats/{chat_id}/files",
+        files={"file": ("hello.txt", b"Hello world", "text/plain")},
+    )
+    assert r.status_code == 200
+    att_id = r.json()["id"]
+
+    # retrieve current file list to find the on-disk path via the list endpoint
+    files_r = await client.get(f"/api/chats/{chat_id}/files")
+    assert len(files_r.json()) == 1
+
+    # capture the uploads dir before deletion
+    from backend.config import settings
+    before = set(os.listdir(settings.uploads_dir))
+
+    del_r = await client.delete(f"/api/chats/{chat_id}")
+    assert del_r.status_code == 204
+
+    # at least one file should have disappeared from disk
+    after = set(os.listdir(settings.uploads_dir))
+    assert len(after) < len(before), "uploaded file was not removed from disk on chat delete"
+
+
+async def test_upload_file_timestamps_include_timezone(client: AsyncClient):
+    chat_id = await _create_chat(client)
+    r = await client.post(
+        f"/api/chats/{chat_id}/files",
+        files={"file": ("hello.txt", b"Hello world", "text/plain")},
+    )
+    assert r.status_code == 200
+    ts = r.json()["created_at"]
+    assert "+00:00" in ts or ts.endswith("Z")

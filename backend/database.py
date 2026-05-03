@@ -1,10 +1,15 @@
+import asyncio
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from .config import settings
 
-
 engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+# project root (one level up from this file's package)
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ALEMBIC_INI = os.path.join(_PROJECT_ROOT, "alembic.ini")
 
 
 class Base(DeclarativeBase):
@@ -16,7 +21,14 @@ async def get_db():
         yield session
 
 
-async def init_db():
-    from . import models  # noqa: F401
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def run_migrations():
+    """Run Alembic migrations to head. Called once at app startup."""
+    def _migrate():
+        from alembic.config import Config
+        from alembic import command
+        cfg = Config(_ALEMBIC_INI)
+        # point alembic at the live DATABASE_URL
+        cfg.set_main_option("sqlalchemy.url", settings.database_url)
+        command.upgrade(cfg, "head")
+
+    await asyncio.to_thread(_migrate)

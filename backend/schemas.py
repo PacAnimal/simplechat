@@ -10,13 +10,20 @@ PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6"}
 class ChatCreate(BaseModel):
     provider: str = Field(..., pattern="^(openai|anthropic)$")
     model: Optional[str] = None
-    title: str = "New Chat"
+    title: Optional[str] = None  # None means no explicit title; auto-title will apply
 
 
 class ChatUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=255)
     web_search_enabled: Optional[bool] = None
     model: Optional[str] = None
+    provider: Optional[str] = Field(default=None, pattern="^(openai|anthropic)$")
+
+    @model_validator(mode="after")
+    def model_requires_provider(self) -> "ChatUpdate":
+        if self.model is not None and self.provider is None:
+            raise ValueError("provider is required when changing model")
+        return self
 
 
 class ChatRead(BaseModel):

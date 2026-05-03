@@ -4,6 +4,7 @@ import time
 from openai import AsyncOpenAI
 import anthropic
 from .config import settings
+from .schemas import PROVIDER_DEFAULTS
 
 _CHAT_RE = re.compile(r'^(gpt-4|gpt-3\.5-turbo|o[0-9]|chatgpt-)', re.IGNORECASE)
 _EXCLUDE_RE = re.compile(r'(embed|whisper|tts-|instruct|realtime|transcr|moderat|search|audio)', re.IGNORECASE)
@@ -19,14 +20,10 @@ _FALLBACK_ANTHROPIC = [
     {"id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6"},
     {"id": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5"},
 ]
-_DEFAULTS = {
-    "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-6",
-}
-
 _cache: dict = {}
 _cache_time: float = 0.0
 _CACHE_TTL = 3600.0
+_refresh_lock = asyncio.Lock()
 
 
 async def _fetch_openai() -> list[dict]:
@@ -59,12 +56,16 @@ async def refresh() -> dict:
     results = await asyncio.gather(_fetch_openai(), _fetch_anthropic(), return_exceptions=True)
     openai_models = results[0] if isinstance(results[0], list) and results[0] else _FALLBACK_OPENAI
     anthropic_models = results[1] if isinstance(results[1], list) and results[1] else _FALLBACK_ANTHROPIC
-    _cache = {"openai": openai_models, "anthropic": anthropic_models, "defaults": _DEFAULTS}
+    _cache = {"openai": openai_models, "anthropic": anthropic_models, "defaults": PROVIDER_DEFAULTS}
     _cache_time = time.monotonic()
     return _cache
 
 
 async def get_models() -> dict:
-    if not _cache or time.monotonic() - _cache_time > _CACHE_TTL:
+    if _cache and time.monotonic() - _cache_time <= _CACHE_TTL:
+        return _cache
+    async with _refresh_lock:
+        # re-check under lock in case another coroutine refreshed while we waited
+        if _cache and time.monotonic() - _cache_time <= _CACHE_TTL:
+            return _cache
         return await refresh()
-    return _cache

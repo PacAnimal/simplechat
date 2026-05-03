@@ -130,3 +130,48 @@ async def test_list_chats_no_params_returns_all(client: AsyncClient):
 async def test_list_chats_invalid_limit(client: AsyncClient):
     r = await client.get("/api/chats?limit=0")
     assert r.status_code == 422
+
+
+async def test_update_chat_model_requires_provider(client: AsyncClient):
+    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    chat_id = create.json()["id"]
+    r = await client.patch(f"/api/chats/{chat_id}", json={"model": "claude-sonnet-4-6"})
+    assert r.status_code == 422
+
+
+async def test_update_chat_model_with_provider(client: AsyncClient):
+    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    chat_id = create.json()["id"]
+    r = await client.patch(f"/api/chats/{chat_id}", json={"model": "claude-sonnet-4-6", "provider": "anthropic"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["model"] == "claude-sonnet-4-6"
+    assert data["provider"] == "anthropic"
+
+
+async def test_update_chat_title_too_long(client: AsyncClient):
+    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    chat_id = create.json()["id"]
+    r = await client.patch(f"/api/chats/{chat_id}", json={"title": "x" * 256})
+    assert r.status_code == 422
+
+
+async def test_timestamps_include_timezone(client: AsyncClient):
+    r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    assert r.status_code == 200
+    data = r.json()
+    # must include UTC offset so JS new Date() interprets correctly
+    assert "+00:00" in data["created_at"] or data["created_at"].endswith("Z")
+    assert "+00:00" in data["updated_at"] or data["updated_at"].endswith("Z")
+
+
+async def test_create_chat_with_explicit_title(client: AsyncClient):
+    r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "My Project"})
+    assert r.status_code == 200
+    assert r.json()["title"] == "My Project"
+
+
+async def test_create_chat_without_title_defaults_to_new_chat(client: AsyncClient):
+    r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    assert r.status_code == 200
+    assert r.json()["title"] == "New Chat"

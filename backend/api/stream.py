@@ -1,6 +1,6 @@
-import asyncio
 import json
 import logging
+import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +22,8 @@ async def _attachment_text(att: Attachment) -> str:
     if att.mime_type not in _TEXT_MIME_TYPES:
         return ""
     try:
-        def _read():
-            with open(att.path, "r", encoding="utf-8", errors="replace") as f:
-                return f.read(50_000)
-        body = await asyncio.to_thread(_read)
+        async with aiofiles.open(att.path, "r", encoding="utf-8", errors="replace") as f:
+            body = await f.read(50_000)
         return f"\n\n[Attached file: {att.filename}]\n```\n{body}\n```"
     except Exception:
         return ""
@@ -123,9 +121,10 @@ async def _event_stream(chat_id: int, user_content: str, attachment_ids: list[in
         if generated_images:
             await db.commit()
 
-        # auto-title after first exchange
-        if chat.title == "New Chat":
+        # auto-title on first exchange when no explicit title was set
+        if chat.title_is_default:
             chat.title = user_content[:60].strip() or "New Chat"
+            chat.title_is_default = False
             await db.commit()
             yield f"data: {json.dumps({'type': 'chat_title', 'title': chat.title})}\n\n"
 

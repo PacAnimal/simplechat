@@ -200,6 +200,40 @@ async def test_anthropic_provider_raises_without_key():
         m.settings.anthropic_api_key = original
 
 
+async def test_anthropic_unknown_block_type_does_not_corrupt_output():
+    """Unknown content_block_start type must be silently ignored, not re-append the previous block."""
+    from backend.providers.anthropic_provider import AnthropicProvider
+
+    events_sequence = [
+        MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_0")),
+        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="Hello")),
+        MagicMock(type="content_block_stop"),
+        # unknown block type — must reset current_block to None
+        MagicMock(type="content_block_start", content_block=MagicMock(type="future_block_type", id="blk_1")),
+        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="IGNORED")),
+        MagicMock(type="content_block_stop"),
+    ]
+
+    async def async_iter(items):
+        for item in items:
+            yield item
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+    mock_stream.__aexit__ = AsyncMock(return_value=False)
+    mock_stream.__aiter__ = lambda self: async_iter(events_sequence)
+
+    provider = AnthropicProvider()
+    with patch.object(provider.client.messages, "stream", return_value=mock_stream):
+        events = []
+        async for event in provider._stream([{"role": "user", "content": "Hi"}], "claude-sonnet-4-6", False):
+            events.append(event)
+
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    # should only see "Hello", not "IGNORED" (unknown delta type) or a duplicated "Hello"
+    assert text == "Hello"
+
+
 # ---- Max tool iterations ----
 
 async def test_openai_stream_max_iterations_guard():

@@ -1,5 +1,6 @@
 import os
 import uuid
+import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,8 +59,8 @@ async def upload_file(
     ext = os.path.splitext(file.filename or "")[1] or ".bin"
     filename = f"{uuid.uuid4().hex}{ext}"
     dest = os.path.join(settings.uploads_dir, filename)
-    with open(dest, "wb") as f:
-        f.write(content)
+    async with aiofiles.open(dest, "wb") as f:
+        await f.write(content)
 
     att = Attachment(
         chat_id=chat_id,

@@ -1,11 +1,28 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, BigInteger
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from .database import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(timezone.utc)
+
+
+class UTCDateTime(TypeDecorator):
+    """DateTime that always returns timezone-aware UTC datetimes."""
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class Chat(Base):
@@ -13,11 +30,12 @@ class Chat(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), default="New Chat")
+    title_is_default = Column(Boolean, default=True, nullable=False)
     provider = Column(String(50), nullable=False)
     model = Column(String(100), nullable=False)
     web_search_enabled = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utcnow)
+    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan", order_by="Message.created_at")
     attachments = relationship("Attachment", back_populates="chat", cascade="all, delete-orphan")
@@ -31,9 +49,7 @@ class Message(Base):
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False, default="")
-    tool_calls_json = Column(Text, nullable=True)
-    tool_call_id = Column(String(200), nullable=True)
-    created_at = Column(DateTime, default=utcnow)
+    created_at = Column(UTCDateTime, default=utcnow)
 
     chat = relationship("Chat", back_populates="messages")
     attachments = relationship("Attachment", back_populates="message")
@@ -50,7 +66,7 @@ class Attachment(Base):
     mime_type = Column(String(100), nullable=False)
     path = Column(String(500), nullable=False)
     size = Column(BigInteger, nullable=False)
-    created_at = Column(DateTime, default=utcnow)
+    created_at = Column(UTCDateTime, default=utcnow)
 
     chat = relationship("Chat", back_populates="attachments")
     message = relationship("Message", back_populates="attachments")
@@ -64,7 +80,7 @@ class GeneratedImage(Base):
     message_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
     prompt = Column(Text, nullable=False)
     path = Column(String(500), nullable=False)
-    created_at = Column(DateTime, default=utcnow)
+    created_at = Column(UTCDateTime, default=utcnow)
 
     chat = relationship("Chat", back_populates="generated_images")
     message = relationship("Message", back_populates="generated_images")

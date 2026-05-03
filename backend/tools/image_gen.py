@@ -1,5 +1,6 @@
 import os
 import uuid
+import aiofiles
 import httpx
 from openai import AsyncOpenAI
 from ..config import settings
@@ -26,8 +27,8 @@ async def generate_image(prompt: str, size: str = "1024x1024") -> dict:
     async with httpx.AsyncClient() as http:
         img_response = await http.get(image_url, timeout=60)
         img_response.raise_for_status()
-        with open(dest_path, "wb") as f:
-            f.write(img_response.content)
+        async with aiofiles.open(dest_path, "wb") as f:
+            await f.write(img_response.content)
 
     return {
         "path": dest_path,

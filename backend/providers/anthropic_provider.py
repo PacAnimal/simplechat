@@ -71,6 +71,7 @@ class AnthropicProvider:
                 async for event in stream:
                     if event.type == "content_block_start":
                         blk = event.content_block
+                        current_block = None
                         if blk.type == "text":
                             current_block = {"type": "text", "content": ""}
                         elif blk.type == "thinking":
