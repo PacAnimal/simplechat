@@ -8,6 +8,29 @@ export async function resetDB() {
   await ctx.dispose();
 }
 
+export async function loginWithTestProfile(page: Page) {
+  const ctx = await request.newContext();
+  const r1 = await ctx.post(`${BACKEND}/api/profiles`, {
+    data: { name: "TestUser", password: "testpass", avatar: 0 },
+  });
+  const profile = await r1.json();
+  const r2 = await ctx.post(`${BACKEND}/api/profiles/${profile.id}/login`, {
+    data: { password: "testpass" },
+  });
+  const { token } = await r2.json();
+  await ctx.dispose();
+
+  await page.evaluate(
+    ({ tok, prof }) => {
+      localStorage.setItem("simplechat_token", tok);
+      localStorage.setItem("simplechat_profile", JSON.stringify(prof));
+    },
+    { tok: token, prof: profile },
+  );
+  await page.reload();
+  await page.waitForSelector('[data-testid="sidebar"]', { timeout: 10_000 });
+}
+
 export async function createChat(
   page: Page,
   provider: "openai" | "anthropic",

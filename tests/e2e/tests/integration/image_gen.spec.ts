@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { resetDB, createChat, sendMessage } from "./helpers";
+import { resetDB, loginWithTestProfile, createChat, sendMessage } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 test("Anthropic generates image when asked and it appears inline", async ({ page }) => {

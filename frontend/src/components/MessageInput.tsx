@@ -47,13 +47,31 @@ export default function MessageInput({
     onSend(trimmed, attachments.map((a) => a.id));
     setText("");
     setAttachments([]);
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.focus();
+    }
   }, [text, attachments, disabled, onSend]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+    if (e.key === "Enter" && e.ctrlKey) {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart ?? text.length;
+      const end = el.selectionEnd ?? text.length;
+      const newVal = text.slice(0, start) + "\n" + text.slice(end);
+      setText(newVal);
+      requestAnimationFrame(() => {
+        el.selectionStart = start + 1;
+        el.selectionEnd = start + 1;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+      });
     }
   }
 
@@ -129,7 +147,6 @@ export default function MessageInput({
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder="Message SimpleChat…"
-            disabled={disabled}
             rows={1}
             className="w-full bg-transparent text-[0.9375rem] text-primary placeholder-muted resize-none outline-none px-4 pt-3.5 pb-2 max-h-60 leading-relaxed font-sans"
             data-testid="message-input"
@@ -194,7 +211,7 @@ export default function MessageInput({
         </div>
 
         <p className="text-center text-[0.7rem] text-muted mt-2">
-          Enter to send · Shift+Enter for newline
+          Enter to send · Shift+Enter or Ctrl+Enter for newline
         </p>
       </div>
     </div>

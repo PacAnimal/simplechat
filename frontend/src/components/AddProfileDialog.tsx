@@ -101,8 +101,8 @@ export default function AddProfileDialog({ onCreated, onClose }: Props) {
                   type="button"
                   onClick={() => setAvatar(i)}
                   className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all",
-                    avatar === i ? "ring-2 ring-accent ring-offset-2 ring-offset-elevated scale-110" : "hover:scale-105 opacity-70 hover:opacity-100",
+                    "w-9 h-9 rounded-full flex items-center justify-center text-2xl transition-all",
+                    avatar === i ? "ring-2 ring-inset ring-accent scale-110" : "hover:scale-105 opacity-70 hover:opacity-100",
                   )}
                   style={{ backgroundColor: av.bg }}
                   title={av.emoji}

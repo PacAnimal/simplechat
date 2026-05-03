@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
+from ..event_logging import log_event
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
 from ..providers import AnthropicProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
@@ -144,6 +145,7 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     chat = await get_owned_chat(chat_id, profile.id, db)
+    log_event(profile.name, "send_message", chat_id=chat_id)
 
     return StreamingResponse(
         _event_stream(chat, body.content, body.attachment_ids, db),

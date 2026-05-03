@@ -1,12 +1,10 @@
-import { test, expect, request } from "@playwright/test";
-
-const BACKEND = "http://127.0.0.1:8084";
+import { test, expect } from "@playwright/test";
+import { resetDB, loginWithTestProfile } from "./stub-helpers";
 
 test.beforeEach(async ({ page }) => {
-  const ctx = await request.newContext();
-  await ctx.post(`${BACKEND}/api/test/reset`);
-  await ctx.dispose();
+  await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 test("page loads with sidebar and welcome screen", async ({ page }) => {

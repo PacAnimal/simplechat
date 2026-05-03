@@ -1,12 +1,5 @@
-import { test, expect, request } from "@playwright/test";
-
-const BACKEND = "http://127.0.0.1:8084";
-
-async function resetDB() {
-  const ctx = await request.newContext();
-  await ctx.post(`${BACKEND}/api/test/reset`);
-  await ctx.dispose();
-}
+import { test, expect } from "@playwright/test";
+import { resetDB, loginWithTestProfile } from "./stub-helpers";
 
 async function createChat(page: any, provider: "openai" | "anthropic" = "openai") {
   await page.getByTestId("new-chat-button").click();
@@ -29,6 +22,7 @@ async function sendMessage(page: any, text: string) {
 test.beforeEach(async ({ page }) => {
   await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 // ---- basic message flow ----
@@ -146,13 +140,52 @@ test("web search can be toggled on and off", async ({ page }) => {
   await expect(page.getByText("Search on")).not.toBeVisible({ timeout: 3000 });
 });
 
-test("delete chat removes it from sidebar", async ({ page }) => {
+test("input retains focus after sending via Enter", async ({ page }) => {
   await createChat(page, "openai");
-  const countBefore = await page.locator('[data-testid^="chat-item-"]').count();
+  await page.getByTestId("message-input").click();
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("message-input")).toBeFocused();
+});
 
-  await page.getByTestId("delete-chat-header").click();
-  await page.waitForTimeout(500);
+test("input retains focus after clicking send button", async ({ page }) => {
+  await createChat(page, "openai");
+  await page.getByTestId("message-input").fill("hello");
+  await page.getByTestId("send-button").click();
+  await expect(page.getByTestId("message-input")).toBeFocused();
+});
 
-  const countAfter = await page.locator('[data-testid^="chat-item-"]').count();
-  expect(countAfter).toBe(countBefore - 1);
+test("Shift+Enter inserts newline instead of sending", async ({ page }) => {
+  await createChat(page, "openai");
+  await page.getByTestId("message-input").click();
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("world");
+  await expect(page.getByTestId("message-input")).toHaveValue("hello\nworld");
+  // nothing sent — no user message yet
+  await expect(page.locator('[data-testid="message-user"]')).toHaveCount(0);
+});
+
+test("Ctrl+Enter inserts newline instead of sending", async ({ page }) => {
+  await createChat(page, "openai");
+  await page.getByTestId("message-input").click();
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Control+Enter");
+  await page.keyboard.type("world");
+  await expect(page.getByTestId("message-input")).toHaveValue("hello\nworld");
+  await expect(page.locator('[data-testid="message-user"]')).toHaveCount(0);
+});
+
+test("delete chat via sidebar removes it from sidebar", async ({ page }) => {
+  await createChat(page, "openai");
+  const chatItem = page.locator('[data-testid^="chat-item-"]').first();
+  await expect(chatItem).toBeVisible();
+
+  // hover to reveal the delete button, click it, then confirm
+  await chatItem.hover();
+  await page.locator('[data-testid^="delete-chat-"]').first().click();
+  await page.locator('[data-testid^="confirm-delete-"]').first().click();
+
+  await expect(page.locator('[data-testid^="chat-item-"]')).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByTestId("chat-window")).not.toBeVisible({ timeout: 3000 });
 });

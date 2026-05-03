@@ -4,11 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
 from .api.router import router
+from .app_logging import setup_loggers
 from .config import settings
 from .database import run_migrations
+from .http_logging import HttpLoggingMiddleware
 from .model_registry import refresh as refresh_models
 from .net import is_local
+
+setup_loggers()
 
 
 def _db_dir() -> str:
@@ -51,6 +56,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SimpleChat", lifespan=lifespan)
+
+# logging must be added before proxy middleware so proxy rewrites IP first
+app.add_middleware(HttpLoggingMiddleware)
 
 if settings.incoming_http_proxy:
     app.add_middleware(_LocalProxyMiddleware)

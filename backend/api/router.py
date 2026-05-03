@@ -4,7 +4,8 @@ from ..config import settings
 from .chats import router as chats_router
 from .files import router as files_router
 from .models import router as models_router
-from .profiles import _can_create, router as profiles_router
+from .profiles import _can_create
+from .profiles import router as profiles_router
 from .stream import router as stream_router
 
 router = APIRouter(prefix="/api")

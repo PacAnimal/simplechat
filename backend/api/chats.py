@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from ..auth import get_current_profile
 from ..database import get_db
+from ..event_logging import log_event
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile
 from ..schemas import PROVIDER_DEFAULTS, ChatCreate, ChatRead, ChatUpdate, MessageRead
 from .deps import get_owned_chat
@@ -50,6 +51,7 @@ async def create_chat(
     db.add(chat)
     await db.commit()
     await db.refresh(chat)
+    log_event(profile.name, "create_chat", chat_id=chat.id, provider=chat.provider, model=chat.model)
     return chat
 
 
@@ -99,6 +101,7 @@ async def delete_chat(
     await db.delete(chat)
     await db.commit()
 
+    log_event(profile.name, "delete_chat", chat_id=chat_id)
     for path in file_paths:
         try:
             os.remove(path)

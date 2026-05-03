@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { resetDB, createChat, sendMessage, BACKEND } from "./helpers";
+import { resetDB, loginWithTestProfile, createChat, sendMessage, BACKEND } from "./helpers";
 
 async function enableWebSearch(page: Page, chatId: number) {
   await page.request.patch(`${BACKEND}/api/chats/${chatId}`, {
@@ -17,6 +17,7 @@ async function getLastChatId(page: Page): Promise<number> {
 test.beforeEach(async ({ page }) => {
   await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 test("OpenAI web search finds Norwegian car dealers near Oslo", async ({ page }) => {

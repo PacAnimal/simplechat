@@ -10,7 +10,9 @@ from alembic import context
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
+    from backend.app_logging import reformat_root_handlers
+    reformat_root_handlers()
 
 # import models so metadata is populated
 from backend.models import Base  # noqa: E402

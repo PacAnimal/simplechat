@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircleIcon, GlobeIcon, Trash2Icon, XIcon } from "lucide-react";
+import { AlertCircleIcon, GlobeIcon, XIcon } from "lucide-react";
 import { api, streamMessage } from "../lib/api";
 import type { Message, ToolCallRecord } from "../types";
 import { PROVIDER_LABELS } from "../types";
@@ -10,7 +10,6 @@ import MessageInput from "./MessageInput";
 interface Props {
   chatId: number;
   initialMessage?: string;
-  onDeleted: () => void;
 }
 
 interface StreamingState {
@@ -20,15 +19,13 @@ interface StreamingState {
   toolCalls: ToolCallRecord[];
 }
 
-export default function ChatWindow({ chatId, initialMessage, onDeleted }: Props) {
+export default function ChatWindow({ chatId, initialMessage }: Props) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [sending, setSending] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", chatId],
     queryFn: () => api.getMessages(chatId),
@@ -37,14 +34,6 @@ export default function ChatWindow({ chatId, initialMessage, onDeleted }: Props)
   const chatMeta = useQuery({
     queryKey: ["chat", chatId],
     queryFn: () => api.getChat(chatId),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteChat(chatId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chats"] });
-      onDeleted();
-    },
   });
 
   const toggleWebSearch = useMutation({
@@ -168,33 +157,6 @@ export default function ChatWindow({ chatId, initialMessage, onDeleted }: Props)
             </div>
           )}
 
-          {confirmDelete ? (
-            <div className="flex items-center gap-2 ml-1">
-              <span className="text-xs text-muted">Delete this chat?</span>
-              <button
-                onClick={() => deleteMutation.mutate()}
-                className="text-xs text-red-400 hover:text-red-300 font-medium"
-                data-testid="confirm-delete-chat"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="text-xs text-muted hover:text-primary font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-hover transition-colors ml-1"
-              title="Delete chat"
-              data-testid="delete-chat-header"
-            >
-              <Trash2Icon size={15} />
-            </button>
-          )}
         </div>
       </header>
 

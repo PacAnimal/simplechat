@@ -3,7 +3,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-
 # ---- is_local unit tests ----
 
 def test_loopback_ipv4():

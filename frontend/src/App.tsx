@@ -69,7 +69,6 @@ export default function App() {
             key={selectedChatId}
             chatId={selectedChatId}
             initialMessage={pendingMessage}
-            onDeleted={() => setSelectedChatId(null)}
           />
         ) : (
           <Welcome onNewChat={handleNewChat} />

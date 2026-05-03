@@ -1,12 +1,5 @@
-import { test, expect, request } from "@playwright/test";
-
-const BACKEND = "http://127.0.0.1:8084";
-
-async function resetDB() {
-  const ctx = await request.newContext();
-  await ctx.post(`${BACKEND}/api/test/reset`);
-  await ctx.dispose();
-}
+import { test, expect } from "@playwright/test";
+import { resetDB, loginWithTestProfile } from "./stub-helpers";
 
 async function createChat(page: any, provider: "openai" | "anthropic") {
   await page.getByTestId("new-chat-button").click();
@@ -19,6 +12,7 @@ async function createChat(page: any, provider: "openai" | "anthropic") {
 test.beforeEach(async ({ page }) => {
   await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 test("create OpenAI chat and see chat window", async ({ page }) => {
@@ -43,7 +37,7 @@ test("switching provider updates model list", async ({ page }) => {
 
   await page.getByTestId("provider-openai").click();
   const opts1 = await page.getByTestId("model-select").locator("option").allTextContents();
-  expect(opts1.some((o) => o.includes("GPT"))).toBe(true);
+  expect(opts1.some((o) => o.toLowerCase().includes("gpt"))).toBe(true);
 
   await page.getByTestId("provider-anthropic").click();
   const opts2 = await page.getByTestId("model-select").locator("option").allTextContents();

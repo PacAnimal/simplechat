@@ -5,7 +5,6 @@ import pytest
 
 from backend.tools.calculator import calculate
 
-
 # ---- calculator tool unit tests ----
 
 def test_addition():

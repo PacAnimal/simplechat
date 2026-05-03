@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import create_token, get_current_profile, hash_password, verify_password
 from ..config import settings
-from ..net import is_local
 from ..database import get_db
+from ..event_logging import log_event
 from ..models import Profile
+from ..net import is_local
 from ..schemas import (
     LoginRequest,
     LoginResponse,
@@ -49,6 +50,7 @@ async def create_profile(request: Request, body: ProfileCreate, db: AsyncSession
     db.add(profile)
     await db.commit()
     await db.refresh(profile)
+    log_event(profile.name, "create_profile")
     return profile
 
 
@@ -58,7 +60,9 @@ async def login(profile_id: int, body: LoginRequest, db: AsyncSession = Depends(
     if not profile:
         raise HTTPException(404, "Profile not found")
     if not verify_password(body.password, profile.password_hash):
+        log_event(None, "login_failed", profile_id=profile_id)
         raise HTTPException(401, "Incorrect password")
+    log_event(profile.name, "login")
     return LoginResponse(token=create_token(profile.id), profile=ProfileRead.model_validate(profile))
 
 
@@ -74,6 +78,7 @@ async def update_avatar(
     current.avatar = body.avatar
     await db.commit()
     await db.refresh(current)
+    log_event(current.name, "update_avatar")
     return current
 
 
@@ -90,6 +95,7 @@ async def change_password(
         raise HTTPException(400, "Current password is incorrect")
     current.password_hash = hash_password(body.new_password)
     await db.commit()
+    log_event(current.name, "change_password")
 
 
 @router.delete("/{profile_id}", status_code=204)
@@ -100,5 +106,7 @@ async def delete_profile(
 ):
     if current.id != profile_id:
         raise HTTPException(403, "Cannot delete another profile")
+    name = current.name
     await db.delete(current)
     await db.commit()
+    log_event(name, "delete_profile")

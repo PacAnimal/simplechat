@@ -11,7 +11,7 @@ import ProfileSettingsMenu from "./ProfileSettingsMenu";
 interface Props {
   profile: Profile;
   selectedChatId: number | null;
-  onSelectChat: (id: number) => void;
+  onSelectChat: (id: number | null) => void;
   onNewChat: () => void;
   onLogout: () => void;
   onProfileUpdated: (profile: Profile) => void;
@@ -30,9 +30,10 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteChat,
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["chats"] });
       setConfirmDeleteId(null);
+      if (id === selectedChatId) onSelectChat(null);
     },
   });
 

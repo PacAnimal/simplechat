@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { resetDB, createChat, sendMessage, uploadFile, uploadTextFile } from "./helpers";
+import { resetDB, loginWithTestProfile, createChat, sendMessage, uploadFile, uploadTextFile } from "./helpers";
 
 const SECRET_FILE = "secret.txt";
 const SECRET_CONTENT = "The password is: elephant";
@@ -7,6 +7,7 @@ const SECRET_CONTENT = "The password is: elephant";
 test.beforeEach(async ({ page }) => {
   await resetDB();
   await page.goto("/");
+  await loginWithTestProfile(page);
 });
 
 test("OpenAI reads password from uploaded text file", async ({ page }) => {

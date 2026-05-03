@@ -165,7 +165,7 @@ function ProfileCard({ profile, onClick }: { profile: Profile; onClick: () => vo
 
 export function Avatar({ profile, size = "md" }: { profile: Profile; size?: "sm" | "md" | "lg" }) {
   const av = AVATARS[profile.avatar % AVATARS.length];
-  const sizeClass = size === "lg" ? "w-16 h-16 text-3xl" : size === "sm" ? "w-7 h-7 text-base" : "w-12 h-12 text-2xl";
+  const sizeClass = size === "lg" ? "w-20 h-20 text-[3.5rem]" : size === "sm" ? "w-7 h-7 text-xl" : "w-16 h-16 text-[3rem]";
   return (
     <div
       className={`${sizeClass} rounded-full flex items-center justify-center select-none flex-shrink-0`}

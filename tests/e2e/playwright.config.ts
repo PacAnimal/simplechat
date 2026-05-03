@@ -7,6 +7,7 @@ const FRONTEND_PORT = 5181;
 
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: ["**/integration/**"],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 1,
@@ -26,7 +27,7 @@ export default defineConfig({
   webServer: [
     {
       // always start fresh so STUB_PROVIDERS is guaranteed
-      command: `STUB_PROVIDERS=true DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/e2e_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" python3 -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `STUB_PROVIDERS=true DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/e2e_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" ${ROOT}/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       url: `http://127.0.0.1:${BACKEND_PORT}/api/chats`,
       cwd: ROOT,
       reuseExistingServer: false,
