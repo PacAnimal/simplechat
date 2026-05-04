@@ -13,11 +13,10 @@ A clean, self-hosted AI chat interface supporting both OpenAI and Anthropic mode
 - **Multi-provider** — switch between OpenAI (GPT-4o, o3, etc.) and Anthropic (Claude Sonnet, Opus, Haiku) per chat
 - **Multi-profile** — multiple named profiles, each with their own chat history and settings
 - **Streaming responses** — real-time token-by-token output via SSE
-- **Tool use** — image generation (DALL-E / gpt-image-2) and web search (DuckDuckGo)
+- **Tool use** — image generation (DALL-E / gpt-image-2) and web search
 - **Extended thinking** — renders Claude's thinking blocks in a collapsible UI
 - **File attachments** — attach text, JSON, CSV, and Markdown files to messages
 - **Markdown rendering** — syntax-highlighted code blocks and full Markdown support
-- **Dark mode** — dark UI by default
 - **Self-contained** — single Docker image, SQLite database, no external dependencies
 
 ---
