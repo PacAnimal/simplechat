@@ -14,7 +14,7 @@ from .. import sse_events
 from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
-from ..event_logging import log_event
+from ..event_logging import audit_message, log_event
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
 from ..providers import AnthropicProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
@@ -78,7 +78,10 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
     result = await db.execute(
         select(Message)
         .where(Message.chat_id == chat_id)
-        .options(selectinload(Message.attachments))
+        .options(
+            selectinload(Message.attachments),
+            selectinload(Message.generated_images),
+        )
         .order_by(Message.created_at)
     )
     rows = result.scalars().all()
@@ -90,7 +93,10 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
                 content += await _attachment_text(att)
             out.append({"role": "user", "content": content})
         elif m.role == "assistant":
-            out.append({"role": "assistant", "content": m.content})
+            content = m.content
+            for img in m.generated_images:
+                content += f"\n\n[Generated image — path: {img.path} | prompt: {img.prompt}]"
+            out.append({"role": "assistant", "content": content})
     return out
 
 
@@ -281,6 +287,8 @@ async def send_message(
         await asyncio.sleep(holdoff)
 
     log_event(profile.name, "send_message", chat_id=chat_id)
+    if settings.audit_log:
+        audit_message(profile.name, chat_id, body.content)
 
     return StreamingResponse(
         _event_stream(

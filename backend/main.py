@@ -9,6 +9,7 @@ from .api.router import router
 from .app_logging import setup_loggers
 from .config import settings
 from .database import run_migrations
+from .event_logging import setup_audit_log
 from .http_logging import HttpLoggingMiddleware
 from .jwt_secret import resolve as resolve_jwt_secret
 from .model_registry import refresh as refresh_models
@@ -48,6 +49,8 @@ async def lifespan(app: FastAPI):
     data_dir = _db_dir()
     os.makedirs(data_dir, exist_ok=True)
     settings.jwt_secret = resolve_jwt_secret(data_dir, os.environ.get("JWT_SECRET"))
+    if settings.audit_log:
+        setup_audit_log(data_dir)
     os.makedirs(settings.uploads_dir, exist_ok=True)
     os.makedirs(settings.generated_dir, exist_ok=True)
     await run_migrations()

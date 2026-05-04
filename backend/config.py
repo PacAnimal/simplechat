@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     allowed_models: str = ""
     # image generation model (OpenAI)
     image_model: str = "gpt-image-2"
+    # write user/chatId/content to data/audit.log when enabled
+    audit_log: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

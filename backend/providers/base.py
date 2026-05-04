@@ -10,7 +10,7 @@ MAX_TOOL_ITERATIONS = 10
 async def execute_tool(name: str, args: dict) -> dict:
     if name == "generate_image":
         return await _generate_image(
-            args.get("prompt", ""), args.get("size", "1024x1024")
+            args.get("prompt", ""), args.get("size", "1024x1024"), args.get("image_path")
         )
     if name == "calculate":
         return _calculate(args.get("expression", ""))
@@ -56,18 +56,27 @@ CALCULATOR_TOOL = {
 
 GENERATE_IMAGE_TOOL = {
     "name": "generate_image",
-    "description": "Generate an image using DALL-E 3. Use this when the user asks you to create, draw, or generate an image or picture.",
+    "description": (
+        "Generate a new image or edit an existing one. "
+        "When the user wants to modify a previously generated image (e.g. 'make the hat red', 'add a dog', 'change the background'), "
+        "pass the image_path of that image along with a full description of the desired result as the prompt. "
+        "Use this whenever the user asks to create, draw, generate, or modify an image."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
             "prompt": {
                 "type": "string",
-                "description": "A detailed description of the image to generate",
+                "description": "A detailed description of the image to generate, or the full desired result when editing an existing image",
             },
             "size": {
                 "type": "string",
-                "enum": ["1024x1024", "1792x1024", "1024x1792"],
+                "enum": ["1024x1024", "1536x1024", "1024x1536"],
                 "description": "Image dimensions. Default 1024x1024.",
+            },
+            "image_path": {
+                "type": "string",
+                "description": "Path of a previously generated image to edit. Only provide this when the user wants to modify an existing image.",
             },
         },
         "required": ["prompt"],
