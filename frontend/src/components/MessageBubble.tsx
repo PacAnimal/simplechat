@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Message, InlineImage, ToolCallRecord } from "../types";
 import { getToken } from "../lib/api";
+import SvgCanvas from "./SvgCanvas";
 
 interface Props {
   message: Message;
@@ -152,8 +153,65 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard access denied or unavailable */ }
+  }
+  return (
+    <button
+      onClick={copy}
+      className="flex items-center gap-1 p-1 rounded text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+      title="Copy response"
+    >
+      {copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+    </button>
+  );
+}
+
+// split message content into text segments and raw <svg>...</svg> blocks
+const CODE_FENCE_RE = /```[\s\S]*?```/g;
+const RAW_SVG_RE = /<svg[\s\S]*?<\/svg>/gi;
+
+type ContentPart = { type: "text"; value: string } | { type: "svg"; value: string };
+
+function splitContent(content: string): ContentPart[] {
+  const codeRanges: [number, number][] = [];
+  for (const m of content.matchAll(CODE_FENCE_RE)) {
+    codeRanges.push([m.index!, m.index! + m[0].length]);
+  }
+  const inCode = (i: number) => codeRanges.some(([s, e]) => i >= s && i < e);
+
+  const parts: ContentPart[] = [];
+  let lastIndex = 0;
+  for (const m of content.matchAll(RAW_SVG_RE)) {
+    if (inCode(m.index!)) continue;
+    if (m.index! > lastIndex) parts.push({ type: "text", value: content.slice(lastIndex, m.index) });
+    parts.push({ type: "svg", value: m[0] });
+    lastIndex = m.index! + m[0].length;
+  }
+  if (lastIndex < content.length) parts.push({ type: "text", value: content.slice(lastIndex) });
+  return parts.length ? parts : [{ type: "text", value: content }];
+}
+
+function isSvgCodeBlock(children: React.ReactNode): string | null {
+  const child = Array.isArray(children) ? children[0] : children;
+  if (!child || !React.isValidElement(child)) return null;
+  const cls: string = (child.props as { className?: string }).className ?? "";
+  const lang = /language-(\w+)/.exec(cls)?.[1] ?? "";
+  if (lang !== "svg" && lang !== "xml") return null;
+  const text = getNodeText(children);
+  return text.trimStart().startsWith("<svg") ? text : null;
+}
+
 const markdownComponents = {
   pre: ({ children, ...props }: React.ComponentPropsWithoutRef<"pre">) => {
+    const svgText = isSvgCodeBlock(children);
+    if (svgText) return <SvgCanvas svg={svgText} />;
     const text = getNodeText(children);
     return (
       <div className="relative group/pre">
@@ -163,6 +221,28 @@ const markdownComponents = {
     );
   },
 };
+
+function AssistantContent({ content }: { content: string }) {
+  const parts = splitContent(content);
+  return (
+    <div className="prose-chat">
+      {parts.map((part, i) =>
+        part.type === "svg" ? (
+          <SvgCanvas key={i} svg={part.value} />
+        ) : (
+          <ReactMarkdown
+            key={i}
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
+          >
+            {part.value}
+          </ReactMarkdown>
+        )
+      )}
+    </div>
+  );
+}
 
 export default function MessageBubble({ message, images = message.images ?? [] }: Props) {
   const isUser = message.role === "user";
@@ -180,17 +260,14 @@ export default function MessageBubble({ message, images = message.images ?? [] }
             {message.content}
           </p>
         ) : (
-          <div className="prose-chat">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={markdownComponents}
-            >
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          <AssistantContent content={message.content} />
         )}
         <ImageGrid images={images} />
+        {!isUser && (
+          <div className="mt-1">
+            <MessageCopyButton text={message.content} />
+          </div>
+        )}
       </div>
     </div>
   );

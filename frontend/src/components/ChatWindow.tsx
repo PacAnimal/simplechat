@@ -142,6 +142,20 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // show user message immediately before the network round-trip
+    qc.setQueryData(["messages", chatId], (old: Message[] | undefined) => [
+      ...(old ?? []),
+      {
+        id: -Date.now(),
+        chat_id: chatId,
+        role: "user" as const,
+        content,
+        thinking: null,
+        images: [],
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
     setSending(true);
     setStreamError(null);
     setStreaming({ content: "", images: [], thinking: "", toolCalls: [] });
