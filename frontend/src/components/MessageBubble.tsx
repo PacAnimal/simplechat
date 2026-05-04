@@ -9,6 +9,7 @@ import {
   CheckIcon, LoaderIcon, GlobeIcon, ImageIcon, CopyIcon, AlertCircleIcon,
 } from "lucide-react";
 import type { Message, InlineImage, ToolCallRecord } from "../types";
+import { getToken } from "../lib/api";
 
 interface Props {
   message: Message;
@@ -30,7 +31,31 @@ function Avatar({ role }: { role: string }) {
   );
 }
 
+function useAuthedBlobUrl(url: string): string {
+  const [blobUrl, setBlobUrl] = useState("");
+  useEffect(() => {
+    const token = getToken();
+    if (!url.startsWith("/api/generated/") || !token) {
+      setBlobUrl(url);
+      return;
+    }
+    let objectUrl = "";
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => setBlobUrl(url));
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url]);
+  return blobUrl;
+}
+
 function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
+  const src = useAuthedBlobUrl(img.url);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -54,7 +79,7 @@ function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
           <XIcon size={16} />
         </button>
         <img
-          src={img.url}
+          src={src}
           alt={img.prompt}
           className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl"
         />
@@ -67,22 +92,29 @@ function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
   );
 }
 
+function ImageThumbnail({ img, onClick }: { img: InlineImage; onClick: () => void }) {
+  const src = useAuthedBlobUrl(img.url);
+  return (
+    <div className="mt-4">
+      <img
+        src={src}
+        alt={img.prompt}
+        className="rounded-xl max-w-sm max-h-80 object-contain border border-border cursor-pointer hover:opacity-90 transition-opacity"
+        loading="lazy"
+        onClick={onClick}
+        data-testid="generated-image"
+      />
+      <p className="text-xs text-muted mt-1.5 italic">{img.prompt}</p>
+    </div>
+  );
+}
+
 function ImageGrid({ images }: { images: InlineImage[] }) {
   const [lightbox, setLightbox] = useState<InlineImage | null>(null);
   return (
     <>
       {images.map((img, i) => (
-        <div key={i} className="mt-4">
-          <img
-            src={img.url}
-            alt={img.prompt}
-            className="rounded-xl max-w-sm max-h-80 object-contain border border-border cursor-pointer hover:opacity-90 transition-opacity"
-            loading="lazy"
-            onClick={() => setLightbox(img)}
-            data-testid="generated-image"
-          />
-          <p className="text-xs text-muted mt-1.5 italic">{img.prompt}</p>
-        </div>
+        <ImageThumbnail key={i} img={img} onClick={() => setLightbox(img)} />
       ))}
       {lightbox && <Lightbox img={lightbox} onClose={() => setLightbox(null)} />}
     </>

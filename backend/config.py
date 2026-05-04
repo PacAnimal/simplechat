@@ -1,6 +1,11 @@
+import secrets
 from typing import Literal
 
 from pydantic_settings import BaseSettings
+
+# random default — replaced by the lifespan with a persistent key in production;
+# ensures tests work without a lifespan without shipping a known insecure default
+_DEFAULT_JWT_SECRET = secrets.token_hex(32)
 
 
 class Settings(BaseSettings):
@@ -12,7 +17,8 @@ class Settings(BaseSettings):
     stub_providers: bool = False
     allow_reset: bool = False
     reset_secret: str | None = None
-    jwt_secret: str = "simplechat-dev-secret-change-in-production"
+    jwt_secret: str = _DEFAULT_JWT_SECRET
+    show_docs: bool = False
     # profile creation policy: "local" (RFC-1918 + loopback), "any", or "none"
     create: Literal["local", "any", "none"] = "local"
     # trust X-Forwarded-For / X-Forwarded-Proto from a local reverse proxy

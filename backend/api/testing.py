@@ -19,7 +19,7 @@ async def reset_db(
     x_reset_secret: str | None = Header(default=None),
 ):
     """Delete all data — E2E test isolation helper."""
-    if settings.reset_secret and x_reset_secret != settings.reset_secret:
+    if not settings.reset_secret or x_reset_secret != settings.reset_secret:
         raise HTTPException(403, "Invalid or missing X-Reset-Secret header")
 
     att_paths = (await db.execute(select(Attachment.path))).scalars().all()

@@ -45,6 +45,7 @@ async def _attachment_text(att: Attachment) -> str:
             body = await f.read()
         return f"\n\n[Attached file: {att.filename}]\n```\n{body}\n```"
     except Exception:
+        logger.warning("Failed to read attachment %s (%s)", att.filename, att.path, exc_info=True)
         return ""
 
 
@@ -148,11 +149,8 @@ async def _generate_chat_title(
     """Use a lightweight LLM call to produce a short chat title (5 words max)."""
     if settings.stub_providers:
         return user_content[:60].strip() or "New Chat"
-    prompt = (
-        f"User: {user_content[:400]}\nAssistant: {assistant_content[:400]}\n\n"
-        "Write a short title for this conversation (5 words max). "
-        "Only the title — no quotes, no punctuation."
-    )
+    system = "Generate a short title for the conversation shown. Reply with only the title — 5 words max, no quotes, no punctuation."
+    user_msg = f"User: {user_content[:400]}\nAssistant: {assistant_content[:400]}"
     try:
         if provider == "anthropic" and settings.anthropic_api_key:
             import anthropic
@@ -161,7 +159,8 @@ async def _generate_chat_title(
             resp = await client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=20,
-                messages=[{"role": "user", "content": prompt}],
+                system=system,
+                messages=[{"role": "user", "content": user_msg}],
             )
             return resp.content[0].text.strip()[:100]
         if provider == "openai" and settings.openai_api_key:
@@ -171,7 +170,10 @@ async def _generate_chat_title(
             resp = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 max_tokens=20,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
             )
             return (resp.choices[0].message.content or "").strip()[:100]
     except Exception:

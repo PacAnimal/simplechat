@@ -47,7 +47,7 @@ class _LocalProxyMiddleware:
 async def lifespan(app: FastAPI):
     data_dir = _db_dir()
     os.makedirs(data_dir, exist_ok=True)
-    settings.jwt_secret = resolve_jwt_secret(data_dir, settings.jwt_secret)
+    settings.jwt_secret = resolve_jwt_secret(data_dir, os.environ.get("JWT_SECRET"))
     os.makedirs(settings.uploads_dir, exist_ok=True)
     os.makedirs(settings.generated_dir, exist_ok=True)
     await run_migrations()
@@ -58,7 +58,12 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SimpleChat", lifespan=lifespan)
+app = FastAPI(
+    title="SimpleChat",
+    lifespan=lifespan,
+    docs_url="/docs" if settings.show_docs else None,
+    redoc_url="/redoc" if settings.show_docs else None,
+)
 
 # logging must be added before proxy middleware so proxy rewrites IP first
 app.add_middleware(HttpLoggingMiddleware)
@@ -69,7 +74,6 @@ if settings.incoming_http_proxy:
 app.include_router(router)
 
 os.makedirs(settings.generated_dir, exist_ok=True)
-app.mount("/generated", StaticFiles(directory=settings.generated_dir), name="generated")
 
 # serve the React SPA (built into ./static)
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")

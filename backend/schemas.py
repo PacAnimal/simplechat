@@ -54,7 +54,7 @@ class GeneratedImageEmbed(BaseModel):
         if hasattr(data, "path"):
             return {
                 "prompt": data.prompt,
-                "url": f"/generated/{os.path.basename(data.path)}",
+                "url": f"/api/generated/{os.path.basename(data.path)}",
             }
         return data
 

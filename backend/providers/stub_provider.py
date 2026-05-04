@@ -56,7 +56,7 @@ class StubProvider:
             path = _ensure_placeholder()
             yield {
                 "type": sse_events.IMAGE_GENERATED,
-                "url": f"/generated/{_PLACEHOLDER_FILENAME}",
+                "url": f"/api/generated/{_PLACEHOLDER_FILENAME}",
                 "prompt": last_user,
                 "path": path,
             }

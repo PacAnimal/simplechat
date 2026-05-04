@@ -30,12 +30,13 @@ async def search_messages(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
+    q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     result = await db.execute(
         select(Message, Chat)
         .join(Chat, Chat.id == Message.chat_id)
         .where(
             Chat.profile_id == profile.id,
-            Message.content.ilike(f"%{q}%"),
+            Message.content.ilike(f"%{q_safe}%", escape="\\"),
         )
         .order_by(desc(Message.created_at))
         .limit(limit)

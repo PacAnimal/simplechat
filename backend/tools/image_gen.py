@@ -34,7 +34,7 @@ async def generate_image(prompt: str, size: str = "1024x1024") -> dict:
 
     return {
         "path": dest_path,
-        "url": f"/generated/{filename}",
+        "url": f"/api/generated/{filename}",
         "prompt": prompt,
         "text": "I've generated the image. It will be displayed inline.",
     }

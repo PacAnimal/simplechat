@@ -1,8 +1,11 @@
+import asyncio
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import create_token, get_current_profile, hash_password, verify_password
+from ..auth import create_token, get_current_profile, hash_password, invalidate_tokens, verify_password
 from ..config import settings
 from ..database import get_db
 from ..event_logging import log_event
@@ -63,16 +66,22 @@ async def create_profile(
 async def login(
     profile_id: int, body: LoginRequest, db: AsyncSession = Depends(get_db)
 ):
-    profile = await db.get(Profile, profile_id)
-    if not profile:
-        raise HTTPException(404, "Profile not found")
-    if not verify_password(body.password, profile.password_hash):
-        log_event(None, "login_failed", profile_id=profile_id)
-        raise HTTPException(401, "Incorrect password")
-    log_event(profile.name, "login")
-    return LoginResponse(
-        token=create_token(profile.id), profile=ProfileRead.model_validate(profile)
-    )
+    t0 = time.monotonic()
+    try:
+        profile = await db.get(Profile, profile_id)
+        if not profile:
+            raise HTTPException(404, "Profile not found")
+        if not verify_password(body.password, profile.password_hash):
+            log_event(None, "login_failed", profile_id=profile_id)
+            raise HTTPException(401, "Incorrect password")
+        log_event(profile.name, "login")
+        return LoginResponse(
+            token=create_token(profile.id), profile=ProfileRead.model_validate(profile)
+        )
+    finally:
+        elapsed = time.monotonic() - t0
+        if elapsed < 4.0:
+            await asyncio.sleep(4.0 - elapsed)
 
 
 @router.patch("/{profile_id}/avatar", response_model=ProfileRead)
@@ -125,6 +134,7 @@ async def change_password(
     if not verify_password(body.current_password, current.password_hash):
         raise HTTPException(400, "Current password is incorrect")
     current.password_hash = hash_password(body.new_password)
+    invalidate_tokens(current)
     await db.commit()
     log_event(current.name, "change_password")
 

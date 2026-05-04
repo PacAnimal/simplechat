@@ -5,12 +5,11 @@ import secrets
 logger = logging.getLogger(__name__)
 
 _KEY_FILENAME = "jwt_secret.key"
-_DEFAULT_INSECURE = "simplechat-dev-secret-change-in-production"
 
 
-def resolve(data_dir: str, configured: str) -> str:
+def resolve(data_dir: str, configured: str | None) -> str:
     """Return the JWT secret — from env var, persisted key file, or newly generated."""
-    if configured and configured != _DEFAULT_INSECURE:
+    if configured:
         return configured
     key_file = os.path.join(data_dir, _KEY_FILENAME)
     if os.path.exists(key_file):

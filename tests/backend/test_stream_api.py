@@ -134,7 +134,7 @@ async def test_stream_image_generation(client: AsyncClient):
         yield {"type": "tool_start", "name": "generate_image"}
         yield {
             "type": "image_generated",
-            "url": "/generated/test.png",
+            "url": "/api/generated/test.png",
             "prompt": "a cat",
             "path": "/tmp/test.png",
         }
@@ -151,7 +151,7 @@ async def test_stream_image_generation(client: AsyncClient):
 
     image_events = [e for e in events if e["type"] == "image_generated"]
     assert len(image_events) == 1
-    assert image_events[0]["url"] == "/generated/test.png"
+    assert image_events[0]["url"] == "/api/generated/test.png"
 
 
 async def test_stream_updates_chat_updated_at(client: AsyncClient):

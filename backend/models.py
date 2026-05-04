@@ -47,6 +47,7 @@ class Profile(Base):
     avatar = Column(Integer, nullable=False, default=0)
     avatar_color = Column(String(20), nullable=True)
     created_at = Column(UTCDateTime, default=utcnow)
+    token_invalidated_at = Column(UTCDateTime, nullable=True)
 
     chats = relationship("Chat", back_populates="profile", cascade="all, delete-orphan")
 
@@ -57,7 +58,7 @@ class Chat(Base):
     __tablename__ = "chats"
 
     id = Column(Integer, primary_key=True, index=True)
-    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
     title = Column(String(255), default="New Chat")
     title_is_default = Column(Boolean, default=True, nullable=False)
     provider = Column(String(50), nullable=False)

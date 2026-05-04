@@ -99,7 +99,7 @@ async def test_openai_stream_image_tool():
 
     fake_image_result = {
         "path": "/tmp/test.png",
-        "url": "/generated/test.png",
+        "url": "/api/generated/test.png",
         "prompt": "a cat",
         "text": "Image generated.",
     }
@@ -312,7 +312,7 @@ async def test_openai_stream_max_iterations_guard():
 
     fake_result = {
         "path": "/tmp/x.png",
-        "url": "/generated/x.png",
+        "url": "/api/generated/x.png",
         "prompt": "loop",
         "text": "Done.",
     }
@@ -380,7 +380,7 @@ async def test_anthropic_stream_max_iterations_guard():
 
     fake_result = {
         "path": "/tmp/x.png",
-        "url": "/generated/x.png",
+        "url": "/api/generated/x.png",
         "prompt": "loop",
         "text": "Done.",
     }
