@@ -38,9 +38,11 @@ async def _create_and_login(c: AsyncClient, name: str, password: str) -> tuple[i
 @pytest.mark.asyncio
 async def test_reset_blocked_when_no_secret_configured():
     """When RESET_SECRET is not set, the reset endpoint must always return 403."""
-    import backend.api.testing as m
     from unittest.mock import AsyncMock, MagicMock
+
     from fastapi import HTTPException
+
+    import backend.api.testing as m
     original = m.settings.reset_secret
     m.settings.reset_secret = None
     try:
@@ -205,8 +207,8 @@ async def test_search_underscore_not_matched(client: AsyncClient):
 
 def test_docs_disabled_by_default():
     """FastAPI docs_url/redoc_url must be None when SHOW_DOCS is not set."""
-    from backend.main import app
     from backend.config import settings
+    from backend.main import app
     assert not settings.show_docs, "SHOW_DOCS must default to false"
     assert app.docs_url is None, "/docs must be disabled"
     assert app.redoc_url is None, "/redoc must be disabled"

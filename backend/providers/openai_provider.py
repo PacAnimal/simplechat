@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 
 from openai import AsyncOpenAI
@@ -16,6 +17,8 @@ from .base import (
     tool_result_event,
 )
 from .base import execute_tool as _execute_tool
+
+logger = logging.getLogger(__name__)
 
 
 async def _web_search(query: str) -> str:
@@ -165,6 +168,7 @@ class OpenAIProvider:
                             }
                         )  # type: ignore
                     except Exception as e:
+                        logger.exception("Tool %s failed", tc["name"])
                         err = f"Tool error: {e}"
                         yield {
                             "type": sse_events.TOOL_RESULT,

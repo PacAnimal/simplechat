@@ -17,13 +17,12 @@ async def generate_image(prompt: str, size: str = "1024x1024") -> dict:
     if size not in valid_sizes:
         size = "1024x1024"
 
-    response = await client.images.generate(
-        model=settings.image_model,
-        prompt=prompt,
-        size=size,  # type: ignore
-        n=1,
-        response_format="b64_json",
-    )
+    kwargs: dict = {"model": settings.image_model, "prompt": prompt, "size": size, "n": 1}
+    # dall-e-* models require response_format; gpt-image-* always returns b64
+    if settings.image_model.startswith("dall-e"):
+        kwargs["response_format"] = "b64_json"
+
+    response = await client.images.generate(**kwargs)  # type: ignore
 
     image_data = base64.b64decode(response.data[0].b64_json)
     filename = f"{uuid.uuid4().hex}.png"

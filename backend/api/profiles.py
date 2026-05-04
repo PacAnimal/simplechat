@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import create_token, get_current_profile, hash_password, invalidate_tokens, verify_password
+from ..auth import (
+    create_token,
+    get_current_profile,
+    hash_password,
+    invalidate_tokens,
+    verify_password,
+)
 from ..config import settings
 from ..database import get_db
 from ..event_logging import log_event

@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import AsyncIterator
 
 import anthropic
@@ -14,6 +15,8 @@ from .base import (
     tool_result_event,
 )
 from .base import execute_tool as _execute_tool
+
+logger = logging.getLogger(__name__)
 
 _ANTHROPIC_IMAGE_TOOL = {
     "name": GENERATE_IMAGE_TOOL["name"],
@@ -175,6 +178,7 @@ class AnthropicProvider:
                         }
                     )
                 except Exception as e:
+                    logger.exception("Tool %s failed", tc["name"])
                     err = f"Tool error: {e}"
                     yield {
                         "type": sse_events.TOOL_RESULT,
