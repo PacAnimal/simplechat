@@ -9,7 +9,7 @@ from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
 from ..event_logging import log_event
-from ..models import Attachment, Chat, GeneratedImage, Message, Profile
+from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
 from ..schemas import (
     PROVIDER_DEFAULTS,
     ChatCreate,
@@ -36,6 +36,7 @@ async def search_messages(
         .join(Chat, Chat.id == Message.chat_id)
         .where(
             Chat.profile_id == profile.id,
+            Chat.discarded_at.is_(None),
             Message.content.ilike(f"%{q_safe}%", escape="\\"),
         )
         .order_by(desc(Message.created_at))
@@ -66,7 +67,7 @@ async def list_chats(
 ):
     q = (
         select(Chat)
-        .where(Chat.profile_id == profile.id)
+        .where(Chat.profile_id == profile.id, Chat.discarded_at.is_(None))
         .order_by(desc(Chat.updated_at))
         .offset(offset)
     )
@@ -149,6 +150,12 @@ async def delete_chat(
     db: AsyncSession = Depends(get_db),
 ):
     chat = await get_owned_chat(chat_id, profile.id, db)
+
+    if settings.soft_delete:
+        chat.discarded_at = utcnow()
+        await db.commit()
+        log_event(profile.name, "discard_chat", chat_id=chat_id)
+        return
 
     att_result = await db.execute(
         select(Attachment.path).where(Attachment.chat_id == chat.id)

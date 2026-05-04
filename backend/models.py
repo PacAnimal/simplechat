@@ -66,6 +66,7 @@ class Chat(Base):
     web_search_enabled = Column(Boolean, default=False)
     created_at = Column(UTCDateTime, default=utcnow)
     updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    discarded_at = Column(UTCDateTime, nullable=True)
 
     profile = relationship("Profile", back_populates="chats")
     messages = relationship(

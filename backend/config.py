@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     image_model: str = "gpt-image-2"
     # write user/chatId/content to data/audit.log when enabled
     audit_log: bool = False
+    # mark chats as deleted instead of removing them from the database
+    soft_delete: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

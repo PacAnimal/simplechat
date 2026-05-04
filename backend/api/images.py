@@ -43,7 +43,11 @@ async def serve_generated_image(
     result = await db.execute(
         select(GeneratedImage)
         .join(Chat, Chat.id == GeneratedImage.chat_id)
-        .where(GeneratedImage.path == full_path, Chat.profile_id == profile_id)
+        .where(
+            GeneratedImage.path == full_path,
+            Chat.profile_id == profile_id,
+            Chat.discarded_at.is_(None),
+        )
     )
     if not result.scalar_one_or_none():
         raise HTTPException(404)
