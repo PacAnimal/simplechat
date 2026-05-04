@@ -36,3 +36,6 @@ test-results/
 .vscode/
 .idea/
 *.swp
+
+# claude
+CLAUDE.md
