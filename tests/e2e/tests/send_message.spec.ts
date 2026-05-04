@@ -157,22 +157,30 @@ test("input retains focus after clicking send button", async ({ page }) => {
 
 test("Shift+Enter inserts newline instead of sending", async ({ page }) => {
   await createChat(page, "openai");
-  await page.getByTestId("message-input").click();
+  const input = page.getByTestId("message-input");
+  await input.click();
   await page.keyboard.type("hello");
+  await expect(input).toHaveValue("hello");
   await page.keyboard.press("Shift+Enter");
+  // guard: newline must appear before we continue — if Shift was dropped the
+  // message would have been sent and the input would be empty, failing here
+  await expect(input).toHaveValue("hello\n");
   await page.keyboard.type("world");
-  await expect(page.getByTestId("message-input")).toHaveValue("hello\nworld");
+  await expect(input).toHaveValue("hello\nworld");
   // nothing sent — no user message yet
   await expect(page.locator('[data-testid="message-user"]')).toHaveCount(0);
 });
 
 test("Ctrl+Enter inserts newline instead of sending", async ({ page }) => {
   await createChat(page, "openai");
-  await page.getByTestId("message-input").click();
+  const input = page.getByTestId("message-input");
+  await input.click();
   await page.keyboard.type("hello");
+  await expect(input).toHaveValue("hello");
   await page.keyboard.press("Control+Enter");
+  await expect(input).toHaveValue("hello\n");
   await page.keyboard.type("world");
-  await expect(page.getByTestId("message-input")).toHaveValue("hello\nworld");
+  await expect(input).toHaveValue("hello\nworld");
   await expect(page.locator('[data-testid="message-user"]')).toHaveCount(0);
 });
 

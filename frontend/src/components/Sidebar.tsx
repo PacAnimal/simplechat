@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon, SearchIcon, XIcon } from "lucide-react";
 import { api } from "../lib/api";
-import type { Chat, Profile } from "../types";
+import type { Chat, MessageSearchResult, Profile } from "../types";
 import { PROVIDER_LABELS } from "../types";
 import { cn } from "../lib/utils";
 import { Avatar } from "./ProfilePicker";
@@ -17,23 +17,51 @@ interface Props {
   onProfileUpdated: (profile: Profile) => void;
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated }: Props) {
   const qc = useQueryClient();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debouncedQuery = useDebounce(searchQuery, 300);
 
   const { data: chats = [] } = useQuery({
     queryKey: ["chats"],
     queryFn: api.listChats,
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
   });
+
+  const { data: searchResults = [], isFetching: searching } = useQuery({
+    queryKey: ["search", debouncedQuery],
+    queryFn: () => api.searchMessages(debouncedQuery),
+    enabled: debouncedQuery.trim().length > 0,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (searchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    } else {
+      setSearchQuery("");
+    }
+  }, [searchOpen]);
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteChat,
     onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: ["chats"] });
       setConfirmDeleteId(null);
       if (id === selectedChatId) onSelectChat(null);
+      qc.invalidateQueries({ queryKey: ["chats"] });
     },
   });
 
@@ -52,26 +80,92 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
     setConfirmDeleteId(null);
   }
 
+  function handleSearchResultClick(result: MessageSearchResult) {
+    onSelectChat(result.chat_id);
+    setSearchOpen(false);
+  }
+
   return (
     <aside
       className="w-64 flex-shrink-0 flex flex-col bg-sidebar h-full"
       data-testid="sidebar"
     >
-      {/* logo + new chat button */}
+      {/* logo + action buttons */}
       <div className="flex items-center justify-between px-3 pt-4 pb-2">
         <div className="flex items-center gap-2 px-2">
           <BotIcon size={20} className="text-accent" />
           <span className="text-sm font-semibold text-primary tracking-tight">SimpleChat</span>
         </div>
-        <button
-          onClick={onNewChat}
-          className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
-          title="New chat"
-          data-testid="new-chat-button"
-        >
-          <PlusIcon size={18} />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => setSearchOpen((o) => !o)}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              searchOpen
+                ? "bg-accent/15 text-accent"
+                : "hover:bg-hover text-muted hover:text-primary",
+            )}
+            title="Search messages"
+            data-testid="search-button"
+          >
+            <SearchIcon size={16} />
+          </button>
+          <button
+            onClick={onNewChat}
+            className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
+            title="New chat"
+            data-testid="new-chat-button"
+          >
+            <PlusIcon size={18} />
+          </button>
+        </div>
       </div>
+
+      {/* search panel */}
+      {searchOpen && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-2 bg-input border border-border rounded-lg px-2.5 py-1.5 focus-within:border-accent/60 transition-colors">
+            <SearchIcon size={13} className="text-muted flex-shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search messages…"
+              className="flex-1 bg-transparent text-xs text-primary placeholder-muted outline-none"
+              data-testid="search-input"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-muted hover:text-primary">
+                <XIcon size={11} />
+              </button>
+            )}
+          </div>
+          {debouncedQuery.trim() && (
+            <div className="mt-1 max-h-64 overflow-y-auto">
+              {searching ? (
+                <p className="text-xs text-muted px-2 py-2">Searching…</p>
+              ) : searchResults.length === 0 ? (
+                <p className="text-xs text-muted px-2 py-2">No results</p>
+              ) : (
+                searchResults.map((r) => (
+                  <button
+                    key={r.message_id}
+                    onClick={() => handleSearchResultClick(r)}
+                    className="w-full text-left px-2 py-2 rounded-lg hover:bg-hover transition-colors"
+                  >
+                    <p className="text-[0.7rem] font-medium text-accent truncate">{r.chat_title}</p>
+                    <p className="text-[0.75rem] text-secondary truncate mt-0.5">
+                      <span className="text-muted">{r.role === "user" ? "You: " : "AI: "}</span>
+                      {r.content.slice(0, 80)}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* divider */}
       <div className="mx-3 border-t border-border mb-2" />

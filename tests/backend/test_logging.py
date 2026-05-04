@@ -47,8 +47,16 @@ def uvicorn_proc():
     }
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "backend.main:app",
-         "--host", "127.0.0.1", "--port", str(port)],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "backend.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
@@ -71,12 +79,17 @@ def test_http_and_event_logs_emitted(uvicorn_proc):
     base_url, proc = uvicorn_proc
 
     # create profile → should emit event log
-    r = httpx.post(f"{base_url}/api/profiles", json={"name": "Alice", "password": "pass", "avatar": 0})
+    r = httpx.post(
+        f"{base_url}/api/profiles",
+        json={"name": "Alice", "password": "passWord1", "avatar": 0},
+    )
     assert r.status_code == 201, r.text
     profile_id = r.json()["id"]
 
     # login → should emit event log
-    r = httpx.post(f"{base_url}/api/profiles/{profile_id}/login", json={"password": "pass"})
+    r = httpx.post(
+        f"{base_url}/api/profiles/{profile_id}/login", json={"password": "passWord1"}
+    )
     assert r.status_code == 200, r.text
 
     proc.terminate()
@@ -84,8 +97,12 @@ def test_http_and_event_logs_emitted(uvicorn_proc):
     output = (stdout + stderr).decode(errors="replace")
 
     assert "req:" in output, f"no HTTP log lines in output:\n{output}"
-    assert "event Alice create_profile" in output, f"'event Alice create_profile' not in output:\n{output}"
-    assert "event Alice login" in output, f"'event Alice login' not in output:\n{output}"
+    assert "event Alice create_profile" in output, (
+        f"'event Alice create_profile' not in output:\n{output}"
+    )
+    assert "event Alice login" in output, (
+        f"'event Alice login' not in output:\n{output}"
+    )
 
 
 def test_log_format(uvicorn_proc):
@@ -111,7 +128,9 @@ def test_log_format(uvicorn_proc):
     # uvicorn startup messages must use our format (not "INFO:     ")
     for line in lines:
         if "startup complete" in line.lower() or "uvicorn running on" in line.lower():
-            assert line.startswith(abbrevs), f"startup message not reformatted: {line!r}"
+            assert line.startswith(abbrevs), (
+                f"startup message not reformatted: {line!r}"
+            )
 
     # HTTP request lines must use our format — no "INFO:     req:"
     for line in lines:
@@ -127,9 +146,71 @@ def test_log_format(uvicorn_proc):
 
     # uvicorn access log must be suppressed — no raw IP access lines
     for line in lines:
-        assert '" 200' not in line and '" 404' not in line, \
+        assert '" 200' not in line and '" 404' not in line, (
             f"uvicorn access log line leaked through: {line!r}"
+        )
 
     # each request produces exactly 2 lines (start + finish), no duplicates
     req_lines = [line for line in lines if "req:0 " in line]
-    assert len(req_lines) == 2, f"expected 2 lines for req:0, got {len(req_lines)}:\n{output}"
+    assert len(req_lines) == 2, (
+        f"expected 2 lines for req:0, got {len(req_lines)}:\n{output}"
+    )
+
+
+def test_startup_logs_available_models(uvicorn_proc):
+    """On startup, one log line per configured provider lists model IDs alphabetically."""
+    _base_url, proc = uvicorn_proc
+    proc.terminate()
+    stdout, stderr = proc.communicate(timeout=10)
+    output = (stdout + stderr).decode(errors="replace")
+
+    # uvicorn_proc sets both OPENAI_API_KEY and ANTHROPIC_API_KEY,
+    # so both providers are configured and must each produce one log line
+    lines = output.splitlines()
+    openai_lines = [line for line in lines if "OpenAI models:" in line]
+    anthropic_lines = [line for line in lines if "Anthropic models:" in line]
+
+    assert len(openai_lines) == 1, f"expected 1 OpenAI log line, got:\n{output}"
+    assert len(anthropic_lines) == 1, f"expected 1 Anthropic log line, got:\n{output}"
+
+
+def test_startup_logs_unconfigured_provider():
+    """Unconfigured provider produces no log line; configured provider still logs."""
+    port = _free_port()
+    db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    db.close()
+
+    env = {
+        **os.environ,
+        "DATABASE_URL": f"sqlite+aiosqlite:///{db.name}",
+        "ANTHROPIC_API_KEY": "sk-test",
+        "STUB_PROVIDERS": "true",
+        "CREATE": "any",
+        "UPLOADS_DIR": tempfile.mkdtemp(),
+        "GENERATED_DIR": tempfile.mkdtemp(),
+        "PYTHONUNBUFFERED": "1",
+    }
+    env["OPENAI_API_KEY"] = ""  # empty shadows .env file; falsy → unconfigured
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.main:app",
+         "--host", "127.0.0.1", "--port", str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    try:
+        _wait_ready(port)
+    finally:
+        proc.terminate()
+        stdout, stderr = proc.communicate(timeout=10)
+        os.unlink(db.name)
+
+    output = (stdout + stderr).decode(errors="replace")
+    lines = output.splitlines()
+    assert not any("OpenAI models:" in line for line in lines), (
+        f"unconfigured OpenAI should not produce a log line:\n{output}"
+    )
+    assert any("Anthropic models:" in line for line in lines), (
+        f"expected Anthropic model line in output:\n{output}"
+    )

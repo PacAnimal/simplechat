@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Profile } from "../types";
 import { AVATARS } from "../types";
 import { cn } from "../lib/utils";
+import { validatePassword } from "../lib/validation";
 
 interface Props {
   onCreated: (profile: Profile) => void;
@@ -17,8 +19,12 @@ export default function AddProfileDialog({ onCreated, onClose }: Props) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.getConfig });
+  const minLen = config?.password_min_length ?? 8;
+
+  const passwordError = password.length > 0 ? validatePassword(password, minLen) : "";
   const passwordMismatch = confirm.length > 0 && password !== confirm;
-  const canSubmit = !saving && name.trim().length > 0 && password.length > 0 && password === confirm;
+  const canSubmit = !saving && name.trim().length > 0 && !validatePassword(password, minLen) && password === confirm;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,9 +73,13 @@ export default function AddProfileDialog({ onCreated, onClose }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Choose a password"
-              className="bg-input border border-border rounded-xl px-4 py-2.5 text-sm text-primary placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
+              className={cn(
+                "bg-input border rounded-xl px-4 py-2.5 text-sm text-primary placeholder:text-muted focus:outline-none transition-colors",
+                passwordError ? "border-red-400 focus:border-red-400" : "border-border focus:border-accent/60",
+              )}
               data-testid="add-profile-password"
             />
+            {passwordError && <p className="text-xs text-red-400">{passwordError}</p>}
           </div>
 
           {/* confirm password */}

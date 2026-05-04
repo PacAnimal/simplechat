@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+from .. import sse_events
 from ..tools.calculator import calculate as _calculate
 from ..tools.image_gen import generate_image as _generate_image
 
@@ -8,7 +9,9 @@ MAX_TOOL_ITERATIONS = 10
 
 async def execute_tool(name: str, args: dict) -> dict:
     if name == "generate_image":
-        return await _generate_image(args.get("prompt", ""), args.get("size", "1024x1024"))
+        return await _generate_image(
+            args.get("prompt", ""), args.get("size", "1024x1024")
+        )
     if name == "calculate":
         return _calculate(args.get("expression", ""))
     raise ValueError(f"Unknown tool: {name}")
@@ -20,7 +23,7 @@ class ChatMessage(TypedDict):
 
 
 class StreamEvent(TypedDict, total=False):
-    type: str           # text_delta | thinking_delta | tool_start | tool_result | image_generated | searching | done | error | chat_title
+    type: str  # see sse_events constants
     content: str
     name: str
     url: str
@@ -28,6 +31,7 @@ class StreamEvent(TypedDict, total=False):
     message: str
     message_id: int
     title: str
+    error: str  # set on tool_result when the tool returned an error
 
 
 CALCULATOR_TOOL = {
@@ -84,3 +88,15 @@ WEB_SEARCH_TOOL_OPENAI = {
         "required": ["query"],
     },
 }
+
+
+def tool_result_event(name: str, result: dict) -> StreamEvent:
+    """Build a tool_result event, flagging errors when present."""
+    event: StreamEvent = {
+        "type": sse_events.TOOL_RESULT,
+        "name": name,
+        "content": result.get("text", "Done."),
+    }
+    if "error" in result:
+        event["error"] = result["error"]
+    return event

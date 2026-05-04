@@ -44,7 +44,17 @@ class HttpLoggingMiddleware:
         req_type, req_enc = _parse_content_type(_hdr(req_headers, b"content-type"))
         user_agent = _hdr(req_headers, b"user-agent") or "-"
 
-        logger.info("req:%d %s %s %s - %s %s %s - %s", req_id, ip, method, uri, req_size, req_type, req_enc, user_agent)
+        logger.info(
+            "req:%d %s %s %s - %s %s %s - %s",
+            req_id,
+            ip,
+            method,
+            uri,
+            req_size,
+            req_type,
+            req_enc,
+            user_agent,
+        )
 
         status_code = 500
         resp_size = "-"
@@ -58,15 +68,42 @@ class HttpLoggingMiddleware:
                 status_code = message["status"]
                 resp_headers = {k.lower(): v for k, v in message.get("headers", [])}
                 resp_size = _hdr(resp_headers, b"content-length") or "-"
-                resp_type, resp_enc = _parse_content_type(_hdr(resp_headers, b"content-type"))
+                resp_type, resp_enc = _parse_content_type(
+                    _hdr(resp_headers, b"content-type")
+                )
             await send(message)
 
         try:
             await self.app(scope, receive, _send)
             elapsed = int((time.perf_counter() - start) * 1000)
-            log = logger.error if status_code >= 500 else logger.warning if status_code >= 400 else logger.info
-            log("req:%d %s %s %s %d %s %s %s %dms", req_id, ip, method, uri, status_code, resp_size, resp_type, resp_enc, elapsed)
+            log = (
+                logger.error
+                if status_code >= 500
+                else logger.warning
+                if status_code >= 400
+                else logger.info
+            )
+            log(
+                "req:%d %s %s %s %d %s %s %s %dms",
+                req_id,
+                ip,
+                method,
+                uri,
+                status_code,
+                resp_size,
+                resp_type,
+                resp_enc,
+                elapsed,
+            )
         except Exception as exc:
             elapsed = int((time.perf_counter() - start) * 1000)
-            logger.error("req:%d %s %s %s exception after %dms", req_id, ip, method, uri, elapsed, exc_info=exc)
+            logger.error(
+                "req:%d %s %s %s exception after %dms",
+                req_id,
+                ip,
+                method,
+                uri,
+                elapsed,
+                exc_info=exc,
+            )
             raise

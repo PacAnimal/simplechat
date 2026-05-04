@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircleIcon, GlobeIcon, XIcon } from "lucide-react";
+import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon } from "lucide-react";
 import { api, streamMessage } from "../lib/api";
-import type { Message, ToolCallRecord } from "../types";
-import { PROVIDER_LABELS } from "../types";
+import type { Chat, Message, ToolCallRecord } from "../types";
+import { MODELS, PROVIDER_LABELS } from "../types";
 import MessageBubble, { StreamingBubble, ThinkingBubble, ToolCallsBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
 
@@ -17,6 +17,88 @@ interface StreamingState {
   images: { url: string; prompt: string }[];
   thinking: string;
   toolCalls: ToolCallRecord[];
+}
+
+function ModelSwitcher({ chatId, provider, model, disabled }: {
+  chatId: number;
+  provider: string;
+  model: string;
+  disabled: boolean;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: remoteModels } = useQuery({
+    queryKey: ["models"],
+    queryFn: api.getModels,
+    staleTime: 3_600_000,
+  });
+
+  const modelsFor = (p: string) => {
+    const live = remoteModels?.[p];
+    if (live?.length) return live.map((m) => ({ label: m.label, value: m.id }));
+    return (MODELS as Record<string, { label: string; value: string }[]>)[p] ?? [];
+  };
+
+  const switchModel = useMutation({
+    mutationFn: ({ p, m }: { p: string; m: string }) =>
+      api.updateChat(chatId, { provider: p as Chat["provider"], model: m }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", chatId] });
+      qc.invalidateQueries({ queryKey: ["chats"] });
+      setOpen(false);
+    },
+  });
+
+  // close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => !disabled && setOpen((o) => !o)}
+        className="flex items-center gap-1 text-[0.7rem] text-muted hover:text-secondary transition-colors disabled:cursor-not-allowed"
+        disabled={disabled}
+        title="Switch model"
+      >
+        {PROVIDER_LABELS[provider] ?? provider} · {model}
+        <ChevronDownIcon size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-elevated border border-border rounded-xl shadow-xl p-3 min-w-56">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted mb-2">Switch Model</p>
+          {(["openai", "anthropic"] as const).map((p) => (
+            <div key={p} className="mb-2 last:mb-0">
+              <p className="text-[0.7rem] text-muted mb-1">{PROVIDER_LABELS[p]}</p>
+              {modelsFor(p).map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => switchModel.mutate({ p, m: m.value })}
+                  disabled={switchModel.isPending}
+                  className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors mb-0.5 ${
+                    p === provider && m.value === model
+                      ? "bg-accent/15 text-accent"
+                      : "text-secondary hover:bg-hover hover:text-primary"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ChatWindow({ chatId, initialMessage }: Props) {
@@ -94,7 +176,7 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
               const calls = [...s.toolCalls];
               for (let i = calls.length - 1; i >= 0; i--) {
                 if (calls[i].name === event.name && !calls[i].done) {
-                  calls[i] = { ...calls[i], done: true };
+                  calls[i] = { ...calls[i], done: true, error: event.error };
                   break;
                 }
               }
@@ -142,9 +224,12 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
               {meta?.title ?? "…"}
             </h2>
             {meta && (
-              <p className="text-[0.7rem] text-muted">
-                {PROVIDER_LABELS[meta.provider]} · {meta.model}
-              </p>
+              <ModelSwitcher
+                chatId={chatId}
+                provider={meta.provider}
+                model={meta.model}
+                disabled={sending}
+              />
             )}
           </div>
         </div>

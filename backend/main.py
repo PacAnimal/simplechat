@@ -10,6 +10,7 @@ from .app_logging import setup_loggers
 from .config import settings
 from .database import run_migrations
 from .http_logging import HttpLoggingMiddleware
+from .jwt_secret import resolve as resolve_jwt_secret
 from .model_registry import refresh as refresh_models
 from .net import is_local
 
@@ -44,14 +45,16 @@ class _LocalProxyMiddleware:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    data_dir = _db_dir()
+    os.makedirs(data_dir, exist_ok=True)
+    settings.jwt_secret = resolve_jwt_secret(data_dir, settings.jwt_secret)
     os.makedirs(settings.uploads_dir, exist_ok=True)
     os.makedirs(settings.generated_dir, exist_ok=True)
-    os.makedirs(_db_dir(), exist_ok=True)
     await run_migrations()
     try:
         await refresh_models()
     except Exception:
-        pass  # startup continues with fallback model list
+        pass  # startup continues; model cache pre-warmed on first request
     yield
 
 
@@ -71,7 +74,11 @@ app.mount("/generated", StaticFiles(directory=settings.generated_dir), name="gen
 # serve the React SPA (built into ./static)
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(_static_dir):
-    app.mount("/assets", StaticFiles(directory=os.path.join(_static_dir, "assets")), name="assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(_static_dir, "assets")),
+        name="assets",
+    )
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):

@@ -2,6 +2,7 @@ export interface Profile {
   id: number;
   name: string;
   avatar: number;
+  avatar_color: string | null;
   created_at: string;
 }
 
@@ -25,7 +26,19 @@ export interface Message {
   chat_id: number;
   role: "user" | "assistant";
   content: string;
+  thinking: string | null;
   images: InlineImage[];
+  created_at: string;
+}
+
+export interface MessageSearchResult {
+  message_id: number;
+  chat_id: number;
+  chat_title: string;
+  chat_provider: string;
+  chat_model: string;
+  role: string;
+  content: string;
   created_at: string;
 }
 
@@ -43,7 +56,7 @@ export type StreamEvent =
   | { type: "text_delta"; content: string }
   | { type: "thinking_delta"; content: string }
   | { type: "tool_start"; name: string }
-  | { type: "tool_result"; name: string; content: string }
+  | { type: "tool_result"; name: string; content: string; error?: string }
   | { type: "image_generated"; url: string; prompt: string }
   | { type: "searching"; name: string }
   | { type: "done"; message_id: number }
@@ -53,6 +66,7 @@ export type StreamEvent =
 export interface ToolCallRecord {
   name: string;
   done: boolean;
+  error?: string;
 }
 
 export const PROVIDER_LABELS: Record<string, string> = {

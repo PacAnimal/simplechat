@@ -97,7 +97,7 @@ function Welcome({ onNewChat }: { onNewChat: (initialMessage?: string) => void }
     <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 select-none">
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-primary mb-3 tracking-tight">SimpleChat</h1>
-        <p className="text-secondary text-base">OpenAI and Anthropic in one place.</p>
+        <p className="text-secondary text-base">Yet another AI chat web interface.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
         {SUGGESTIONS.map(({ icon, label, prompt }) => (

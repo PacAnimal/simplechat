@@ -1,18 +1,59 @@
 import os
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..auth import get_current_profile
+from ..config import settings
 from ..database import get_db
 from ..event_logging import log_event
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile
-from ..schemas import PROVIDER_DEFAULTS, ChatCreate, ChatRead, ChatUpdate, MessageRead
+from ..schemas import (
+    PROVIDER_DEFAULTS,
+    ChatCreate,
+    ChatRead,
+    ChatUpdate,
+    MessageRead,
+    MessageSearchResult,
+)
 from .deps import get_owned_chat
 
 router = APIRouter(prefix="/chats", tags=["chats"])
+
+
+@router.get("/messages/search", response_model=list[MessageSearchResult])
+async def search_messages(
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(default=20, ge=1, le=50),
+    profile: Profile = Depends(get_current_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Message, Chat)
+        .join(Chat, Chat.id == Message.chat_id)
+        .where(
+            Chat.profile_id == profile.id,
+            Message.content.ilike(f"%{q}%"),
+        )
+        .order_by(desc(Message.created_at))
+        .limit(limit)
+    )
+    rows = result.all()
+    return [
+        MessageSearchResult(
+            message_id=msg.id,
+            chat_id=chat.id,
+            chat_title=chat.title,
+            chat_provider=chat.provider,
+            chat_model=chat.model,
+            role=msg.role,
+            content=msg.content,
+            created_at=msg.created_at,
+        )
+        for msg, chat in rows
+    ]
 
 
 @router.get("", response_model=list[ChatRead])
@@ -34,12 +75,20 @@ async def list_chats(
     return result.scalars().all()
 
 
+_PROVIDER_KEY_ATTRS = {"openai": "openai_api_key", "anthropic": "anthropic_api_key"}
+_PROVIDER_LABELS = {"openai": "OpenAI", "anthropic": "Anthropic"}
+
+
 @router.post("", response_model=ChatRead, status_code=201)
 async def create_chat(
     body: ChatCreate,
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
+    key_attr = _PROVIDER_KEY_ATTRS.get(body.provider)
+    if key_attr and not getattr(settings, key_attr, None) and not settings.stub_providers:
+        label = _PROVIDER_LABELS.get(body.provider, body.provider)
+        raise HTTPException(status_code=503, detail=f"{label} is not configured on this server")
     model = body.model or PROVIDER_DEFAULTS.get(body.provider, "gpt-4o")
     chat = Chat(
         profile_id=profile.id,
@@ -51,7 +100,13 @@ async def create_chat(
     db.add(chat)
     await db.commit()
     await db.refresh(chat)
-    log_event(profile.name, "create_chat", chat_id=chat.id, provider=chat.provider, model=chat.model)
+    log_event(
+        profile.name,
+        "create_chat",
+        chat_id=chat.id,
+        provider=chat.provider,
+        model=chat.model,
+    )
     return chat
 
 
@@ -94,8 +149,12 @@ async def delete_chat(
 ):
     chat = await get_owned_chat(chat_id, profile.id, db)
 
-    att_result = await db.execute(select(Attachment.path).where(Attachment.chat_id == chat.id))
-    img_result = await db.execute(select(GeneratedImage.path).where(GeneratedImage.chat_id == chat.id))
+    att_result = await db.execute(
+        select(Attachment.path).where(Attachment.chat_id == chat.id)
+    )
+    img_result = await db.execute(
+        select(GeneratedImage.path).where(GeneratedImage.chat_id == chat.id)
+    )
     file_paths = [r[0] for r in att_result.all()] + [r[0] for r in img_result.all()]
 
     await db.delete(chat)

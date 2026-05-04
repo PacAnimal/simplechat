@@ -11,11 +11,11 @@ export async function resetDB() {
 export async function loginWithTestProfile(page: Page) {
   const ctx = await request.newContext();
   const r1 = await ctx.post(`${BACKEND}/api/profiles`, {
-    data: { name: "TestUser", password: "testpass", avatar: 0 },
+    data: { name: "TestUser", password: "testPass1", avatar: 0 },
   });
   const profile = await r1.json();
   const r2 = await ctx.post(`${BACKEND}/api/profiles/${profile.id}/login`, {
-    data: { password: "testpass" },
+    data: { password: "testPass1" },
   });
   const { token } = await r2.json();
   await ctx.dispose();

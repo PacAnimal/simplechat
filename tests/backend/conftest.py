@@ -21,7 +21,9 @@ from backend.main import app  # noqa: E402
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DB_URL)
-TestSession = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+TestSession = async_sessionmaker(
+    test_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -37,11 +39,13 @@ def _override_get_db():
     async def override():
         async with TestSession() as session:
             yield session
+
     return override
 
 
 class BearerAuth(httpx.Auth):
     """Attaches an Authorization: Bearer header to every request."""
+
     def __init__(self, token: str):
         self.token = token
 
@@ -50,12 +54,18 @@ class BearerAuth(httpx.Auth):
         yield request
 
 
-async def _register_and_login(c: AsyncClient, name: str, password: str) -> tuple[int, str]:
+async def _register_and_login(
+    c: AsyncClient, name: str, password: str
+) -> tuple[int, str]:
     """Create a profile and return (profile_id, token)."""
-    r = await c.post("/api/profiles", json={"name": name, "password": password, "avatar": 0})
+    r = await c.post(
+        "/api/profiles", json={"name": name, "password": password, "avatar": 0}
+    )
     assert r.status_code == 201, r.text
     profile_id = r.json()["id"]
-    login_r = await c.post(f"/api/profiles/{profile_id}/login", json={"password": password})
+    login_r = await c.post(
+        f"/api/profiles/{profile_id}/login", json={"password": password}
+    )
     assert login_r.status_code == 200, login_r.text
     return profile_id, login_r.json()["token"]
 
@@ -64,7 +74,9 @@ async def _register_and_login(c: AsyncClient, name: str, password: str) -> tuple
 async def unauthed_client():
     """Raw client with no auth headers — used for testing auth-layer behaviour."""
     app.dependency_overrides[get_db] = _override_get_db()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -72,7 +84,7 @@ async def unauthed_client():
 @pytest_asyncio.fixture
 async def client(unauthed_client: AsyncClient):
     """Authenticated client pre-logged in as 'testuser'."""
-    _, token = await _register_and_login(unauthed_client, "testuser", "testpass")
+    _, token = await _register_and_login(unauthed_client, "testuser", "testPass1")
     unauthed_client.auth = BearerAuth(token)
     yield unauthed_client
     unauthed_client.auth = None

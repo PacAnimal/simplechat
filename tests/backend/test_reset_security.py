@@ -1,4 +1,5 @@
 """Tests for the reset endpoint access control."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,6 +19,7 @@ def _make_db_mock():
 
 async def test_reset_requires_secret_header_when_configured():
     import backend.api.testing as m
+
     original = m.settings.reset_secret
     m.settings.reset_secret = "correct-secret"
     try:
@@ -43,6 +45,7 @@ async def test_reset_requires_secret_header_when_configured():
 
 async def test_reset_allows_without_header_when_secret_not_configured():
     import backend.api.testing as m
+
     original = m.settings.reset_secret
     m.settings.reset_secret = None
     try:

@@ -22,7 +22,9 @@ async def test_create_chat_openai(client: AsyncClient):
 
 
 async def test_create_chat_anthropic(client: AsyncClient):
-    r = await client.post("/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"})
+    r = await client.post(
+        "/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"}
+    )
     assert r.status_code == 201
     data = r.json()
     assert data["provider"] == "anthropic"
@@ -42,14 +44,18 @@ async def test_create_chat_invalid_provider(client: AsyncClient):
 
 async def test_list_chats_returns_created(client: AsyncClient):
     await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
-    await client.post("/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"})
+    await client.post(
+        "/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"}
+    )
     r = await client.get("/api/chats")
     assert r.status_code == 200
     assert len(r.json()) == 2
 
 
 async def test_get_chat(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.get(f"/api/chats/{chat_id}")
     assert r.status_code == 200
@@ -62,7 +68,9 @@ async def test_get_chat_not_found(client: AsyncClient):
 
 
 async def test_update_chat_title(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.patch(f"/api/chats/{chat_id}", json={"title": "My awesome chat"})
     assert r.status_code == 200
@@ -70,7 +78,9 @@ async def test_update_chat_title(client: AsyncClient):
 
 
 async def test_update_web_search(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"})
+    create = await client.post(
+        "/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"}
+    )
     chat_id = create.json()["id"]
     r = await client.patch(f"/api/chats/{chat_id}", json={"web_search_enabled": True})
     assert r.status_code == 200
@@ -78,7 +88,9 @@ async def test_update_web_search(client: AsyncClient):
 
 
 async def test_delete_chat(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.delete(f"/api/chats/{chat_id}")
     assert r.status_code == 204
@@ -87,7 +99,9 @@ async def test_delete_chat(client: AsyncClient):
 
 
 async def test_list_messages_empty(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.get(f"/api/chats/{chat_id}/messages")
     assert r.status_code == 200
@@ -133,16 +147,23 @@ async def test_list_chats_invalid_limit(client: AsyncClient):
 
 
 async def test_update_chat_model_requires_provider(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.patch(f"/api/chats/{chat_id}", json={"model": "claude-sonnet-4-6"})
     assert r.status_code == 422
 
 
 async def test_update_chat_model_with_provider(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
-    r = await client.patch(f"/api/chats/{chat_id}", json={"model": "claude-sonnet-4-6", "provider": "anthropic"})
+    r = await client.patch(
+        f"/api/chats/{chat_id}",
+        json={"model": "claude-sonnet-4-6", "provider": "anthropic"},
+    )
     assert r.status_code == 200
     data = r.json()
     assert data["model"] == "claude-sonnet-4-6"
@@ -150,7 +171,9 @@ async def test_update_chat_model_with_provider(client: AsyncClient):
 
 
 async def test_update_chat_title_too_long(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     r = await client.patch(f"/api/chats/{chat_id}", json={"title": "x" * 256})
     assert r.status_code == 422
@@ -166,7 +189,10 @@ async def test_timestamps_include_timezone(client: AsyncClient):
 
 
 async def test_create_chat_with_explicit_title(client: AsyncClient):
-    r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "My Project"})
+    r = await client.post(
+        "/api/chats",
+        json={"provider": "openai", "model": "gpt-4o", "title": "My Project"},
+    )
     assert r.status_code == 201
     assert r.json()["title"] == "My Project"
 

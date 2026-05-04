@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 
 from openai import AsyncOpenAI
 
+from .. import sse_events
 from ..config import settings
 from .base import (
     CALCULATOR_TOOL,
@@ -12,6 +13,7 @@ from .base import (
     WEB_SEARCH_TOOL_OPENAI,
     ChatMessage,
     StreamEvent,
+    tool_result_event,
 )
 from .base import execute_tool as _execute_tool
 
@@ -28,7 +30,9 @@ async def _web_search(query: str) -> str:
             return "No results found."
         lines = []
         for r in results:
-            lines.append(f"**{r.get('title', '')}**\n{r.get('body', '')}\nSource: {r.get('href', '')}")
+            lines.append(
+                f"**{r.get('title', '')}**\n{r.get('body', '')}\nSource: {r.get('href', '')}"
+            )
         return "\n\n---\n\n".join(lines)
     except Exception as e:
         return f"Search failed: {e}"
@@ -67,7 +71,10 @@ class OpenAIProvider:
         while True:
             iteration += 1
             if iteration > MAX_TOOL_ITERATIONS:
-                yield {"type": "error", "message": "Tool loop exceeded maximum iterations"}
+                yield {
+                    "type": sse_events.ERROR,
+                    "message": "Tool loop exceeded maximum iterations",
+                }
                 break
 
             tool_call_accum: dict[int, dict] = {}
@@ -85,13 +92,17 @@ class OpenAIProvider:
                 delta = chunk.choices[0].delta
 
                 if delta.content:
-                    yield {"type": "text_delta", "content": delta.content}
+                    yield {"type": sse_events.TEXT_DELTA, "content": delta.content}
 
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
                         idx = tc.index
                         if idx not in tool_call_accum:
-                            tool_call_accum[idx] = {"id": "", "name": "", "arguments": ""}
+                            tool_call_accum[idx] = {
+                                "id": "",
+                                "name": "",
+                                "arguments": "",
+                            }
                         if tc.id:
                             tool_call_accum[idx]["id"] = tc.id
                         if tc.function and tc.function.name:
@@ -102,7 +113,6 @@ class OpenAIProvider:
             if not tool_call_accum:
                 break
 
-            # build assistant message with tool calls
             assistant_tool_calls = [
                 {
                     "id": tc["id"],
@@ -111,9 +121,14 @@ class OpenAIProvider:
                 }
                 for tc in tool_call_accum.values()
             ]
-            current_messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})  # type: ignore
+            current_messages.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": assistant_tool_calls,
+                }
+            )  # type: ignore
 
-            # execute each tool
             for tc in tool_call_accum.values():
                 try:
                     args = json.loads(tc["arguments"]) if tc["arguments"] else {}
@@ -121,23 +136,42 @@ class OpenAIProvider:
                     args = {}
 
                 if tc["name"] == "web_search":
-                    yield {"type": "searching", "name": "web_search"}
+                    yield {"type": sse_events.SEARCHING, "name": "web_search"}
                     result_text = await _web_search(args.get("query", ""))
-                    current_messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result_text})  # type: ignore
+                    current_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": result_text,
+                        }
+                    )  # type: ignore
                 else:
-                    yield {"type": "tool_start", "name": tc["name"]}
+                    yield {"type": sse_events.TOOL_START, "name": tc["name"]}
                     try:
                         result = await _execute_tool(tc["name"], args)
                         if tc["name"] == "generate_image":
                             yield {
-                                "type": "image_generated",
+                                "type": sse_events.IMAGE_GENERATED,
                                 "url": result["url"],
                                 "prompt": result["prompt"],
                                 "path": result["path"],
                             }
-                        yield {"type": "tool_result", "name": tc["name"], "content": result.get("text", "Done.")}
-                        current_messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result.get("text", "Done.")})  # type: ignore
+                        yield tool_result_event(tc["name"], result)
+                        current_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result.get("text", "Done."),
+                            }
+                        )  # type: ignore
                     except Exception as e:
                         err = f"Tool error: {e}"
-                        yield {"type": "tool_result", "name": tc["name"], "content": err}
-                        current_messages.append({"role": "tool", "tool_call_id": tc["id"], "content": err})  # type: ignore
+                        yield {
+                            "type": sse_events.TOOL_RESULT,
+                            "name": tc["name"],
+                            "content": err,
+                            "error": err,
+                        }
+                        current_messages.append(
+                            {"role": "tool", "tool_call_id": tc["id"], "content": err}
+                        )  # type: ignore

@@ -7,6 +7,7 @@ pytestmark = pytest.mark.asyncio
 
 # ---- OpenAI provider ----
 
+
 async def test_openai_stream_text():
     from backend.providers.openai_provider import OpenAIProvider
 
@@ -24,12 +25,15 @@ async def test_openai_stream_text():
         async def gen():
             yield chunk1
             yield chunk2
+
         return gen()
 
     provider = OpenAIProvider()
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Hi"}], "gpt-4o", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Hi"}], "gpt-4o", False
+        ):
             events.append(event)
 
     text = "".join(e["content"] for e in events if e["type"] == "text_delta")
@@ -45,12 +49,15 @@ async def test_openai_stream_no_choices():
     async def fake_create(**kwargs):
         async def gen():
             yield empty_chunk
+
         return gen()
 
     provider = OpenAIProvider()
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Hi"}], "gpt-4o", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Hi"}], "gpt-4o", False
+        ):
             events.append(event)
 
     assert events == []
@@ -100,10 +107,15 @@ async def test_openai_stream_image_tool():
     provider = OpenAIProvider()
     with (
         patch.object(provider.client.chat.completions, "create", new=fake_create),
-        patch("backend.providers.openai_provider._execute_tool", new=AsyncMock(return_value=fake_image_result)),
+        patch(
+            "backend.providers.openai_provider._execute_tool",
+            new=AsyncMock(return_value=fake_image_result),
+        ),
     ):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Draw a cat"}], "gpt-4o", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Draw a cat"}], "gpt-4o", False
+        ):
             events.append(event)
 
     assert any(e["type"] == "tool_start" for e in events)
@@ -113,14 +125,22 @@ async def test_openai_stream_image_tool():
 
 # ---- Anthropic provider ----
 
+
 async def test_anthropic_stream_text():
     from backend.providers.anthropic_provider import AnthropicProvider
 
     # build mock streaming context
     events_sequence = [
-        MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_0")),
-        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="Hello")),
-        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text=" world")),
+        MagicMock(
+            type="content_block_start", content_block=MagicMock(type="text", id="blk_0")
+        ),
+        MagicMock(
+            type="content_block_delta", delta=MagicMock(type="text_delta", text="Hello")
+        ),
+        MagicMock(
+            type="content_block_delta",
+            delta=MagicMock(type="text_delta", text=" world"),
+        ),
         MagicMock(type="content_block_stop"),
         MagicMock(type="message_stop"),
     ]
@@ -133,12 +153,16 @@ async def test_anthropic_stream_text():
     mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
     mock_stream.__aexit__ = AsyncMock(return_value=False)
     mock_stream.__aiter__ = lambda self: async_iter(events_sequence)
-    mock_stream.get_final_message = AsyncMock(return_value=MagicMock(stop_reason="end_turn", content=[]))
+    mock_stream.get_final_message = AsyncMock(
+        return_value=MagicMock(stop_reason="end_turn", content=[])
+    )
 
     provider = AnthropicProvider()
     with patch.object(provider.client.messages, "stream", return_value=mock_stream):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Hi"}], "claude-sonnet-4-6", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Hi"}], "claude-sonnet-4-6", False
+        ):
             events.append(event)
 
     text = "".join(e["content"] for e in events if e["type"] == "text_delta")
@@ -149,10 +173,20 @@ async def test_anthropic_stream_web_search_event():
     from backend.providers.anthropic_provider import AnthropicProvider
 
     events_sequence = [
-        MagicMock(type="content_block_start", content_block=MagicMock(type="server_tool_use", id="srv_0", name="web_search")),
+        MagicMock(
+            type="content_block_start",
+            content_block=MagicMock(
+                type="server_tool_use", id="srv_0", name="web_search"
+            ),
+        ),
         MagicMock(type="content_block_stop"),
-        MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_1")),
-        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="Result!")),
+        MagicMock(
+            type="content_block_start", content_block=MagicMock(type="text", id="blk_1")
+        ),
+        MagicMock(
+            type="content_block_delta",
+            delta=MagicMock(type="text_delta", text="Result!"),
+        ),
         MagicMock(type="content_block_stop"),
     ]
 
@@ -164,12 +198,16 @@ async def test_anthropic_stream_web_search_event():
     mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
     mock_stream.__aexit__ = AsyncMock(return_value=False)
     mock_stream.__aiter__ = lambda self: async_iter(events_sequence)
-    mock_stream.get_final_message = AsyncMock(return_value=MagicMock(stop_reason="end_turn", content=[]))
+    mock_stream.get_final_message = AsyncMock(
+        return_value=MagicMock(stop_reason="end_turn", content=[])
+    )
 
     provider = AnthropicProvider()
     with patch.object(provider.client.messages, "stream", return_value=mock_stream):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Search for X"}], "claude-sonnet-4-6", True):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Search for X"}], "claude-sonnet-4-6", True
+        ):
             events.append(event)
 
     assert any(e["type"] == "searching" for e in events)
@@ -178,8 +216,10 @@ async def test_anthropic_stream_web_search_event():
 
 # ---- Optional API key guard ----
 
+
 async def test_openai_provider_raises_without_key():
     import backend.providers.openai_provider as m
+
     original = m.settings.openai_api_key
     m.settings.openai_api_key = None
     try:
@@ -191,6 +231,7 @@ async def test_openai_provider_raises_without_key():
 
 async def test_anthropic_provider_raises_without_key():
     import backend.providers.anthropic_provider as m
+
     original = m.settings.anthropic_api_key
     m.settings.anthropic_api_key = None
     try:
@@ -205,12 +246,22 @@ async def test_anthropic_unknown_block_type_does_not_corrupt_output():
     from backend.providers.anthropic_provider import AnthropicProvider
 
     events_sequence = [
-        MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_0")),
-        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="Hello")),
+        MagicMock(
+            type="content_block_start", content_block=MagicMock(type="text", id="blk_0")
+        ),
+        MagicMock(
+            type="content_block_delta", delta=MagicMock(type="text_delta", text="Hello")
+        ),
         MagicMock(type="content_block_stop"),
         # unknown block type — must reset current_block to None
-        MagicMock(type="content_block_start", content_block=MagicMock(type="future_block_type", id="blk_1")),
-        MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="IGNORED")),
+        MagicMock(
+            type="content_block_start",
+            content_block=MagicMock(type="future_block_type", id="blk_1"),
+        ),
+        MagicMock(
+            type="content_block_delta",
+            delta=MagicMock(type="text_delta", text="IGNORED"),
+        ),
         MagicMock(type="content_block_stop"),
     ]
 
@@ -226,7 +277,9 @@ async def test_anthropic_unknown_block_type_does_not_corrupt_output():
     provider = AnthropicProvider()
     with patch.object(provider.client.messages, "stream", return_value=mock_stream):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Hi"}], "claude-sonnet-4-6", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Hi"}], "claude-sonnet-4-6", False
+        ):
             events.append(event)
 
     text = "".join(e["content"] for e in events if e["type"] == "text_delta")
@@ -235,6 +288,7 @@ async def test_anthropic_unknown_block_type_does_not_corrupt_output():
 
 
 # ---- Max tool iterations ----
+
 
 async def test_openai_stream_max_iterations_guard():
     """Provider must stop after MAX_TOOL_ITERATIONS and yield an error event."""
@@ -253,17 +307,28 @@ async def test_openai_stream_max_iterations_guard():
     async def fake_create(**kwargs):
         async def gen():
             yield tc_chunk
+
         return gen()
 
-    fake_result = {"path": "/tmp/x.png", "url": "/generated/x.png", "prompt": "loop", "text": "Done."}
+    fake_result = {
+        "path": "/tmp/x.png",
+        "url": "/generated/x.png",
+        "prompt": "loop",
+        "text": "Done.",
+    }
 
     provider = OpenAIProvider()
     with (
         patch.object(provider.client.chat.completions, "create", new=fake_create),
-        patch("backend.providers.openai_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+        patch(
+            "backend.providers.openai_provider._execute_tool",
+            new=AsyncMock(return_value=fake_result),
+        ),
     ):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Loop"}], "gpt-4o", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Loop"}], "gpt-4o", False
+        ):
             events.append(event)
 
     error_events = [e for e in events if e["type"] == "error"]
@@ -284,12 +349,21 @@ async def test_anthropic_stream_max_iterations_guard():
     # build a stream that always returns a tool_use block
     def make_tool_events():
         return [
-            MagicMock(type="content_block_start", content_block=MagicMock(
-                type="tool_use", id="tc_0", name="generate_image",
-            )),
-            MagicMock(type="content_block_delta", delta=MagicMock(
-                type="input_json_delta", partial_json='{"prompt":"loop"}',
-            )),
+            MagicMock(
+                type="content_block_start",
+                content_block=MagicMock(
+                    type="tool_use",
+                    id="tc_0",
+                    name="generate_image",
+                ),
+            ),
+            MagicMock(
+                type="content_block_delta",
+                delta=MagicMock(
+                    type="input_json_delta",
+                    partial_json='{"prompt":"loop"}',
+                ),
+            ),
             MagicMock(type="content_block_stop"),
         ]
 
@@ -304,15 +378,29 @@ async def test_anthropic_stream_max_iterations_guard():
         ms.__aiter__ = lambda self: async_iter(make_tool_events())
         return ms
 
-    fake_result = {"path": "/tmp/x.png", "url": "/generated/x.png", "prompt": "loop", "text": "Done."}
+    fake_result = {
+        "path": "/tmp/x.png",
+        "url": "/generated/x.png",
+        "prompt": "loop",
+        "text": "Done.",
+    }
 
     provider = AnthropicProvider()
     with (
-        patch.object(provider.client.messages, "stream", side_effect=lambda **kw: make_mock_stream()),
-        patch("backend.providers.anthropic_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+        patch.object(
+            provider.client.messages,
+            "stream",
+            side_effect=lambda **kw: make_mock_stream(),
+        ),
+        patch(
+            "backend.providers.anthropic_provider._execute_tool",
+            new=AsyncMock(return_value=fake_result),
+        ),
     ):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "Loop"}], "claude-sonnet-4-6", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "Loop"}], "claude-sonnet-4-6", False
+        ):
             events.append(event)
 
     error_events = [e for e in events if e["type"] == "error"]

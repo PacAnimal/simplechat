@@ -1,7 +1,10 @@
 """Tests proving that file attachments are correctly included in provider context."""
 
+import csv
+import io
 import json
 import os
+import pathlib
 import tempfile
 from unittest.mock import patch
 
@@ -18,7 +21,9 @@ async def _create_chat(client: AsyncClient, provider: str = "openai") -> int:
     return r.json()["id"]
 
 
-async def _upload(client: AsyncClient, chat_id: int, filename: str, content: bytes, mime: str) -> int:
+async def _upload(
+    client: AsyncClient, chat_id: int, filename: str, content: bytes, mime: str
+) -> int:
     r = await client.post(
         f"/api/chats/{chat_id}/files",
         files={"file": (filename, content, mime)},
@@ -28,6 +33,7 @@ async def _upload(client: AsyncClient, chat_id: int, filename: str, content: byt
 
 
 # ---- _attachment_text unit tests ----
+
 
 async def test_attachment_text_csv_content_included():
     """`_attachment_text` wraps CSV content with filename and code-block."""
@@ -41,7 +47,13 @@ async def test_attachment_text_csv_content_included():
         path = f.name
 
     try:
-        att = Attachment(chat_id=1, filename="data.csv", mime_type="text/csv", path=path, size=len(csv_bytes))
+        att = Attachment(
+            chat_id=1,
+            filename="data.csv",
+            mime_type="text/csv",
+            path=path,
+            size=len(csv_bytes),
+        )
         result = await _attachment_text(att)
         assert "data.csv" in result
         assert "Alice" in result
@@ -62,7 +74,13 @@ async def test_attachment_text_json_content_included():
         path = f.name
 
     try:
-        att = Attachment(chat_id=1, filename="users.json", mime_type="application/json", path=path, size=len(json_bytes))
+        att = Attachment(
+            chat_id=1,
+            filename="users.json",
+            mime_type="application/json",
+            path=path,
+            size=len(json_bytes),
+        )
         result = await _attachment_text(att)
         assert "users.json" in result
         assert "Alice" in result
@@ -82,7 +100,13 @@ async def test_attachment_text_plain_content_included():
         path = f.name
 
     try:
-        att = Attachment(chat_id=1, filename="notes.txt", mime_type="text/plain", path=path, size=len(text_bytes))
+        att = Attachment(
+            chat_id=1,
+            filename="notes.txt",
+            mime_type="text/plain",
+            path=path,
+            size=len(text_bytes),
+        )
         result = await _attachment_text(att)
         assert "notes.txt" in result
         assert "Q3 targets" in result
@@ -96,7 +120,13 @@ async def test_attachment_text_image_returns_empty():
     from backend.api.stream import _attachment_text
     from backend.models import Attachment
 
-    att = Attachment(chat_id=1, filename="photo.png", mime_type="image/png", path="/tmp/nonexistent.png", size=100)
+    att = Attachment(
+        chat_id=1,
+        filename="photo.png",
+        mime_type="image/png",
+        path="/tmp/nonexistent.png",
+        size=100,
+    )
     assert await _attachment_text(att) == ""
 
 
@@ -104,11 +134,18 @@ async def test_attachment_text_missing_file_returns_empty():
     from backend.api.stream import _attachment_text
     from backend.models import Attachment
 
-    att = Attachment(chat_id=1, filename="gone.txt", mime_type="text/plain", path="/tmp/definitely_not_here_xyz.txt", size=0)
+    att = Attachment(
+        chat_id=1,
+        filename="gone.txt",
+        mime_type="text/plain",
+        path="/tmp/definitely_not_here_xyz.txt",
+        size=0,
+    )
     assert await _attachment_text(att) == ""
 
 
 # ---- CSV analysis via stream endpoint ----
+
 
 async def test_stream_openai_receives_csv_content(client: AsyncClient):
     """OpenAI provider receives CSV attachment content in the user message."""
@@ -127,7 +164,10 @@ async def test_stream_openai_receives_csv_content(client: AsyncClient):
         async with client.stream(
             "POST",
             f"/api/chats/{chat_id}/messages",
-            json={"content": "Which product has the most sales?", "attachment_ids": [att_id]},
+            json={
+                "content": "Which product has the most sales?",
+                "attachment_ids": [att_id],
+            },
         ) as resp:
             async for _ in resp.aiter_lines():
                 pass
@@ -153,11 +193,16 @@ async def test_stream_anthropic_receives_csv_content(client: AsyncClient):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "February."}
 
-    with patch("backend.providers.anthropic_provider.AnthropicProvider._stream", mock_stream):
+    with patch(
+        "backend.providers.anthropic_provider.AnthropicProvider._stream", mock_stream
+    ):
         async with client.stream(
             "POST",
             f"/api/chats/{chat_id}/messages",
-            json={"content": "Which month had the highest revenue?", "attachment_ids": [att_id]},
+            json={
+                "content": "Which month had the highest revenue?",
+                "attachment_ids": [att_id],
+            },
         ) as resp:
             async for _ in resp.aiter_lines():
                 pass
@@ -176,7 +221,9 @@ async def test_stream_json_file_content_in_context(client: AsyncClient):
 
     config = {"server": "prod-01", "port": 8443, "secret": "hunter2"}
     json_bytes = json.dumps(config).encode()
-    att_id = await _upload(client, chat_id, "config.json", json_bytes, "application/json")
+    att_id = await _upload(
+        client, chat_id, "config.json", json_bytes, "application/json"
+    )
 
     captured: list[dict] = []
 
@@ -206,7 +253,9 @@ async def test_stream_multiple_attachments_all_in_context(client: AsyncClient):
     csv_bytes = b"city,population\nOslo,693000\nBergen,285000\n"
     json_bytes = b'{"country":"Norway","capital":"Oslo"}'
     att1 = await _upload(client, chat_id, "cities.csv", csv_bytes, "text/csv")
-    att2 = await _upload(client, chat_id, "country.json", json_bytes, "application/json")
+    att2 = await _upload(
+        client, chat_id, "country.json", json_bytes, "application/json"
+    )
 
     captured: list[dict] = []
 
@@ -230,7 +279,9 @@ async def test_stream_multiple_attachments_all_in_context(client: AsyncClient):
     assert "Norway" in content
 
 
-async def test_stream_attachment_content_absent_without_attachment_ids(client: AsyncClient):
+async def test_stream_attachment_content_absent_without_attachment_ids(
+    client: AsyncClient,
+):
     """When no attachment_ids are sent, uploaded files must not appear in the context."""
     chat_id = await _create_chat(client, "openai")
 
@@ -269,7 +320,9 @@ async def test_stream_text_file_persists_across_turns(client: AsyncClient):
     async def mock_stream_1(self, messages, model, web_search):
         yield {"type": "text_delta", "content": "Got it."}
 
-    with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream_1):
+    with patch(
+        "backend.providers.openai_provider.OpenAIProvider._stream", mock_stream_1
+    ):
         async with client.stream(
             "POST",
             f"/api/chats/{chat_id}/messages",
@@ -285,7 +338,9 @@ async def test_stream_text_file_persists_across_turns(client: AsyncClient):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "$1,200,000"}
 
-    with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream_2):
+    with patch(
+        "backend.providers.openai_provider.OpenAIProvider._stream", mock_stream_2
+    ):
         async with client.stream(
             "POST",
             f"/api/chats/{chat_id}/messages",
@@ -299,3 +354,85 @@ async def test_stream_text_file_persists_across_turns(client: AsyncClient):
     assert len(user_msgs) == 2
     assert "notes.txt" in user_msgs[0]["content"]
     assert "$1,200,000" in user_msgs[0]["content"]
+
+
+# ---- large XLS (5000 rows) context tests ----
+#
+# Converts the fixture XLS to CSV and uploads it, then asserts the full content
+# (including row 5000 and a mid-file row) reaches each provider unchanged.
+
+_FIXTURE_XLS = pathlib.Path(__file__).parent / "fixtures" / "users_5000.xls"
+
+
+def _xls_to_csv_bytes(path: pathlib.Path) -> bytes:
+    import xlrd
+
+    wb = xlrd.open_workbook(str(path))
+    ws = wb.sheet_by_index(0)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    for i in range(ws.nrows):
+        writer.writerow(ws.row_values(i))
+    return buf.getvalue().encode()
+
+
+async def test_large_xls_openai_full_content_in_context(client: AsyncClient):
+    """OpenAI provider receives all 5000 rows; Rasheeda (row 5000) and Angel Sanor (Male) are present."""
+    chat_id = await _create_chat(client, "openai")
+    csv_bytes = _xls_to_csv_bytes(_FIXTURE_XLS)
+    att_id = await _upload(client, chat_id, "users.csv", csv_bytes, "text/csv")
+
+    captured: list[dict] = []
+
+    async def mock_stream(self, messages, model, web_search):
+        captured.extend(messages)
+        yield {"type": "text_delta", "content": "Rasheeda / Male"}
+
+    with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
+        async with client.stream(
+            "POST",
+            f"/api/chats/{chat_id}/messages",
+            json={
+                "content": "What is the name of the 5000th user, and what is Angel Sanor's gender?",
+                "attachment_ids": [att_id],
+            },
+        ) as resp:
+            async for _ in resp.aiter_lines():
+                pass
+
+    content = [m for m in captured if m["role"] == "user"][0]["content"]
+    assert "Rasheeda" in content, "row 5000 first name missing from OpenAI context"
+    assert "Angel" in content and "Sanor" in content, "Angel Sanor missing from OpenAI context"
+    assert "Male" in content, "Angel Sanor's gender missing from OpenAI context"
+
+
+async def test_large_xls_anthropic_full_content_in_context(client: AsyncClient):
+    """Anthropic provider receives all 5000 rows; Rasheeda (row 5000) and Angel Sanor (Male) are present."""
+    chat_id = await _create_chat(client, "anthropic")
+    csv_bytes = _xls_to_csv_bytes(_FIXTURE_XLS)
+    att_id = await _upload(client, chat_id, "users.csv", csv_bytes, "text/csv")
+
+    captured: list[dict] = []
+
+    async def mock_stream(self, messages, model, web_search):
+        captured.extend(messages)
+        yield {"type": "text_delta", "content": "Rasheeda / Male"}
+
+    with patch(
+        "backend.providers.anthropic_provider.AnthropicProvider._stream", mock_stream
+    ):
+        async with client.stream(
+            "POST",
+            f"/api/chats/{chat_id}/messages",
+            json={
+                "content": "What is the name of the 5000th user, and what is Angel Sanor's gender?",
+                "attachment_ids": [att_id],
+            },
+        ) as resp:
+            async for _ in resp.aiter_lines():
+                pass
+
+    content = [m for m in captured if m["role"] == "user"][0]["content"]
+    assert "Rasheeda" in content, "row 5000 first name missing from Anthropic context"
+    assert "Angel" in content and "Sanor" in content, "Angel Sanor missing from Anthropic context"
+    assert "Male" in content, "Angel Sanor's gender missing from Anthropic context"

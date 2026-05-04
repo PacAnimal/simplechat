@@ -37,7 +37,9 @@ def _validate_content(content: bytes, mime_type: str) -> None:
         try:
             json.loads(text)
         except Exception:
-            raise HTTPException(415, "File claims to be JSON but content is not valid JSON")
+            raise HTTPException(
+                415, "File claims to be JSON but content is not valid JSON"
+            )
 
 
 @router.post("/chats/{chat_id}/files", response_model=AttachmentRead)
@@ -55,7 +57,10 @@ async def upload_file(
 
     mime = file.content_type or "application/octet-stream"
     if mime not in ALLOWED_MIME_TYPES:
-        raise HTTPException(415, f"Unsupported file type: {mime}. Supported: text/plain, text/markdown, text/csv, application/json")
+        raise HTTPException(
+            415,
+            f"Unsupported file type: {mime}. Supported: text/plain, text/markdown, text/csv, application/json",
+        )
 
     _validate_content(content, mime)
 
@@ -86,7 +91,9 @@ async def list_files(
 ):
     await get_owned_chat(chat_id, profile.id, db)
     result = await db.execute(
-        select(Attachment).where(Attachment.chat_id == chat_id).order_by(Attachment.created_at)
+        select(Attachment)
+        .where(Attachment.chat_id == chat_id)
+        .order_by(Attachment.created_at)
     )
     return result.scalars().all()
 

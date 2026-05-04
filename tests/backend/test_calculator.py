@@ -7,6 +7,7 @@ from backend.tools.calculator import calculate
 
 # ---- calculator tool unit tests ----
 
+
 def test_addition():
     r = calculate("2 + 2")
     assert r["result"] == 4
@@ -194,6 +195,7 @@ def test_float_result_preserved():
 
 # ---- OpenAI provider: calculator tool call ----
 
+
 @pytest.mark.asyncio
 async def test_openai_calculator_tool_call():
     """OpenAI provider routes calculate tool call through execute_tool and returns result."""
@@ -233,10 +235,15 @@ async def test_openai_calculator_tool_call():
     provider = OpenAIProvider()
     with (
         patch.object(provider.client.chat.completions, "create", new=fake_create),
-        patch("backend.providers.openai_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+        patch(
+            "backend.providers.openai_provider._execute_tool",
+            new=AsyncMock(return_value=fake_result),
+        ),
     ):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "What is sqrt(144)?"}], "gpt-4o", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "What is sqrt(144)?"}], "gpt-4o", False
+        ):
             events.append(event)
 
     assert any(e["type"] == "tool_start" and e["name"] == "calculate" for e in events)
@@ -267,15 +274,22 @@ async def test_openai_calculator_tool_definition_included():
 
     provider = OpenAIProvider()
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
-        async for _ in provider._stream([{"role": "user", "content": "hi"}], "gpt-4o", False):
+        async for _ in provider._stream(
+            [{"role": "user", "content": "hi"}], "gpt-4o", False
+        ):
             pass
 
     assert captured_kwargs
-    tool_names = [t["function"]["name"] for t in captured_kwargs[0]["tools"] if t.get("type") == "function"]
+    tool_names = [
+        t["function"]["name"]
+        for t in captured_kwargs[0]["tools"]
+        if t.get("type") == "function"
+    ]
     assert "calculate" in tool_names
 
 
 # ---- Anthropic provider: calculator tool call ----
+
 
 @pytest.mark.asyncio
 async def test_anthropic_calculator_tool_call():
@@ -291,16 +305,26 @@ async def test_anthropic_calculator_tool_call():
         blk.name = "calculate"
         return [
             MagicMock(type="content_block_start", content_block=blk),
-            MagicMock(type="content_block_delta", delta=MagicMock(
-                type="input_json_delta", partial_json='{"expression": "factorial(5)"}',
-            )),
+            MagicMock(
+                type="content_block_delta",
+                delta=MagicMock(
+                    type="input_json_delta",
+                    partial_json='{"expression": "factorial(5)"}',
+                ),
+            ),
             MagicMock(type="content_block_stop"),
         ]
 
     def make_text_events():
         return [
-            MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_1")),
-            MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="5! is 120.")),
+            MagicMock(
+                type="content_block_start",
+                content_block=MagicMock(type="text", id="blk_1"),
+            ),
+            MagicMock(
+                type="content_block_delta",
+                delta=MagicMock(type="text_delta", text="5! is 120."),
+            ),
             MagicMock(type="content_block_stop"),
         ]
 
@@ -315,18 +339,31 @@ async def test_anthropic_calculator_tool_call():
         ms.__aiter__ = lambda self: async_iter(events_fn())
         return ms
 
-    fake_result = {"result": 120, "expression": "factorial(5)", "text": "factorial(5) = 120"}
+    fake_result = {
+        "result": 120,
+        "expression": "factorial(5)",
+        "text": "factorial(5) = 120",
+    }
 
     event_fns = [make_tool_events, make_text_events]
     fn_iter = iter(event_fns)
 
     provider = AnthropicProvider()
     with (
-        patch.object(provider.client.messages, "stream", side_effect=lambda **kw: make_mock_stream(next(fn_iter))),
-        patch("backend.providers.anthropic_provider._execute_tool", new=AsyncMock(return_value=fake_result)),
+        patch.object(
+            provider.client.messages,
+            "stream",
+            side_effect=lambda **kw: make_mock_stream(next(fn_iter)),
+        ),
+        patch(
+            "backend.providers.anthropic_provider._execute_tool",
+            new=AsyncMock(return_value=fake_result),
+        ),
     ):
         events = []
-        async for event in provider._stream([{"role": "user", "content": "What is 5!?"}], "claude-sonnet-4-6", False):
+        async for event in provider._stream(
+            [{"role": "user", "content": "What is 5!?"}], "claude-sonnet-4-6", False
+        ):
             events.append(event)
 
     assert any(e["type"] == "tool_start" and e["name"] == "calculate" for e in events)
@@ -342,8 +379,14 @@ async def test_anthropic_calculator_tool_definition_included():
 
     def make_text_events():
         return [
-            MagicMock(type="content_block_start", content_block=MagicMock(type="text", id="blk_0")),
-            MagicMock(type="content_block_delta", delta=MagicMock(type="text_delta", text="ok")),
+            MagicMock(
+                type="content_block_start",
+                content_block=MagicMock(type="text", id="blk_0"),
+            ),
+            MagicMock(
+                type="content_block_delta",
+                delta=MagicMock(type="text_delta", text="ok"),
+            ),
             MagicMock(type="content_block_stop"),
         ]
 
@@ -363,7 +406,9 @@ async def test_anthropic_calculator_tool_definition_included():
 
     provider = AnthropicProvider()
     with patch.object(provider.client.messages, "stream", side_effect=make_mock_stream):
-        async for _ in provider._stream([{"role": "user", "content": "hi"}], "claude-sonnet-4-6", False):
+        async for _ in provider._stream(
+            [{"role": "user", "content": "hi"}], "claude-sonnet-4-6", False
+        ):
             pass
 
     assert captured_kwargs
@@ -372,6 +417,7 @@ async def test_anthropic_calculator_tool_definition_included():
 
 
 # ---- execute_tool dispatcher ----
+
 
 @pytest.mark.asyncio
 async def test_execute_tool_calculate():

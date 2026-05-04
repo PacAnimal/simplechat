@@ -1,4 +1,5 @@
 """Test-only endpoints. Only mounted when STUB_PROVIDERS=true or ALLOW_RESET=true."""
+
 import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException

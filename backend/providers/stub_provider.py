@@ -2,11 +2,13 @@
 Stub provider for E2E testing. Activated with STUB_PROVIDERS=true.
 Returns canned responses without calling any real AI API.
 """
+
 import asyncio
 import base64
 import os
 from collections.abc import AsyncIterator
 
+from .. import sse_events
 from ..config import settings
 from .base import ChatMessage, StreamEvent
 
@@ -29,38 +31,48 @@ class StubProvider:
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
 
-    def stream_chat(self, messages: list[ChatMessage], model: str, web_search: bool = False) -> AsyncIterator[StreamEvent]:
+    def stream_chat(
+        self, messages: list[ChatMessage], model: str, web_search: bool = False
+    ) -> AsyncIterator[StreamEvent]:
         return self._gen(messages, model, web_search)
 
-    def _stream(self, messages: list[ChatMessage], model: str, web_search: bool) -> AsyncIterator[StreamEvent]:
+    def _stream(
+        self, messages: list[ChatMessage], model: str, web_search: bool
+    ) -> AsyncIterator[StreamEvent]:
         return self._gen(messages, model, web_search)
 
     async def _gen(self, messages, model, web_search) -> AsyncIterator[StreamEvent]:
-        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        last_user = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+        )
         is_image_request = any(
             kw in last_user.lower()
             for kw in ["image", "picture", "draw", "generate", "paint", "photo"]
         )
 
         if is_image_request:
-            yield {"type": "tool_start", "name": "generate_image"}
+            yield {"type": sse_events.TOOL_START, "name": "generate_image"}
             await asyncio.sleep(0.05)
             path = _ensure_placeholder()
             yield {
-                "type": "image_generated",
+                "type": sse_events.IMAGE_GENERATED,
                 "url": f"/generated/{_PLACEHOLDER_FILENAME}",
                 "prompt": last_user,
                 "path": path,
             }
-            yield {"type": "tool_result", "name": "generate_image", "content": "Image generated."}
+            yield {
+                "type": sse_events.TOOL_RESULT,
+                "name": "generate_image",
+                "content": "Image generated.",
+            }
             for word in f"Here is your generated image! (stub · {self.provider_name} · {model})".split():
-                yield {"type": "text_delta", "content": word + " "}
+                yield {"type": sse_events.TEXT_DELTA, "content": word + " "}
         elif web_search:
-            yield {"type": "searching", "name": "web_search"}
+            yield {"type": sse_events.SEARCHING, "name": "web_search"}
             await asyncio.sleep(0.05)
             for word in f"[Web search enabled] Stub response from {self.provider_name} ({model}).".split():
-                yield {"type": "text_delta", "content": word + " "}
+                yield {"type": sse_events.TEXT_DELTA, "content": word + " "}
         else:
             response = f"Hello! I am a stub response from **{self.provider_name}** using `{model}`. Your message was: _{last_user}_"
             for word in response.split():
-                yield {"type": "text_delta", "content": word + " "}
+                yield {"type": sse_events.TEXT_DELTA, "content": word + " "}

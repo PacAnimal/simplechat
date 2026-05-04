@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 
 import anthropic
 
+from .. import sse_events
 from ..config import settings
 from .base import (
     CALCULATOR_TOOL,
@@ -10,6 +11,7 @@ from .base import (
     MAX_TOOL_ITERATIONS,
     ChatMessage,
     StreamEvent,
+    tool_result_event,
 )
 from .base import execute_tool as _execute_tool
 
@@ -61,7 +63,10 @@ class AnthropicProvider:
         while True:
             iteration += 1
             if iteration > MAX_TOOL_ITERATIONS:
-                yield {"type": "error", "message": "Tool loop exceeded maximum iterations"}
+                yield {
+                    "type": sse_events.ERROR,
+                    "message": "Tool loop exceeded maximum iterations",
+                }
                 break
 
             content_blocks: list[dict] = []
@@ -90,7 +95,7 @@ class AnthropicProvider:
                                 "input_str": "",
                             }
                             if blk.type == "server_tool_use":
-                                yield {"type": "searching", "name": blk.name}
+                                yield {"type": sse_events.SEARCHING, "name": blk.name}
                         if current_block is not None:
                             content_blocks.append(current_block)
 
@@ -99,20 +104,31 @@ class AnthropicProvider:
                             continue
                         delta = event.delta
                         if delta.type == "text_delta":
-                            current_block["content"] = current_block.get("content", "") + delta.text
-                            yield {"type": "text_delta", "content": delta.text}
+                            current_block["content"] = (
+                                current_block.get("content", "") + delta.text
+                            )
+                            yield {"type": sse_events.TEXT_DELTA, "content": delta.text}
                         elif delta.type == "thinking_delta":
                             text = getattr(delta, "thinking", "")
-                            current_block["content"] = current_block.get("content", "") + text
+                            current_block["content"] = (
+                                current_block.get("content", "") + text
+                            )
                             if text:
-                                yield {"type": "thinking_delta", "content": text}
+                                yield {
+                                    "type": sse_events.THINKING_DELTA,
+                                    "content": text,
+                                }
                         elif delta.type == "input_json_delta":
-                            current_block["input_str"] = current_block.get("input_str", "") + delta.partial_json
+                            current_block["input_str"] = (
+                                current_block.get("input_str", "") + delta.partial_json
+                            )
 
                     elif event.type == "content_block_stop":
                         if current_block and current_block["type"] == "tool_use":
                             try:
-                                current_block["input"] = json.loads(current_block.get("input_str", "{}"))
+                                current_block["input"] = json.loads(
+                                    current_block.get("input_str", "{}")
+                                )
                             except json.JSONDecodeError:
                                 current_block["input"] = {}
                             custom_tool_calls.append(current_block)
@@ -127,41 +143,51 @@ class AnthropicProvider:
                 if blk["type"] == "text":
                     assistant_content.append({"type": "text", "text": blk["content"]})
                 elif blk["type"] == "tool_use":
-                    assistant_content.append({
-                        "type": "tool_use",
-                        "id": blk["id"],
-                        "name": blk["name"],
-                        "input": blk.get("input", {}),
-                    })
-                # server_tool_use blocks are handled by Anthropic, skip from history
+                    assistant_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": blk["id"],
+                            "name": blk["name"],
+                            "input": blk.get("input", {}),
+                        }
+                    )
+                # server_tool_use blocks are handled by Anthropic — omit from history
             current_messages.append({"role": "assistant", "content": assistant_content})  # type: ignore
 
-            # execute custom tools and collect results
             tool_results = []
             for tc in custom_tool_calls:
-                yield {"type": "tool_start", "name": tc["name"]}
+                yield {"type": sse_events.TOOL_START, "name": tc["name"]}
                 try:
                     result = await _execute_tool(tc["name"], tc.get("input", {}))
                     if tc["name"] == "generate_image":
                         yield {
-                            "type": "image_generated",
+                            "type": sse_events.IMAGE_GENERATED,
                             "url": result["url"],
                             "prompt": result["prompt"],
                             "path": result["path"],
                         }
-                    yield {"type": "tool_result", "name": tc["name"], "content": result.get("text", "Done.")}
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tc["id"],
-                        "content": result.get("text", "Done."),
-                    })
+                    yield tool_result_event(tc["name"], result)
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tc["id"],
+                            "content": result.get("text", "Done."),
+                        }
+                    )
                 except Exception as e:
                     err = f"Tool error: {e}"
-                    yield {"type": "tool_result", "name": tc["name"], "content": err}
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tc["id"],
+                    yield {
+                        "type": sse_events.TOOL_RESULT,
+                        "name": tc["name"],
                         "content": err,
-                    })
+                        "error": err,
+                    }
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tc["id"],
+                            "content": err,
+                        }
+                    )
 
             current_messages.append({"role": "user", "content": tool_results})  # type: ignore

@@ -1,7 +1,10 @@
 import os
+import re
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .config import settings
 
 PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6"}
 
@@ -49,7 +52,10 @@ class GeneratedImageEmbed(BaseModel):
     @classmethod
     def derive_url(cls, data: object) -> object:
         if hasattr(data, "path"):
-            return {"prompt": data.prompt, "url": f"/generated/{os.path.basename(data.path)}"}
+            return {
+                "prompt": data.prompt,
+                "url": f"/generated/{os.path.basename(data.path)}",
+            }
         return data
 
 
@@ -58,10 +64,26 @@ class MessageRead(BaseModel):
     chat_id: int
     role: str
     content: str
+    thinking: str | None = None
     created_at: datetime
-    images: list[GeneratedImageEmbed] = Field(default=[], validation_alias="generated_images")
+    images: list[GeneratedImageEmbed] = Field(
+        default=[], validation_alias="generated_images"
+    )
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class MessageSearchResult(BaseModel):
+    message_id: int
+    chat_id: int
+    chat_title: str
+    chat_provider: str
+    chat_model: str
+    role: str
+    content: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class AttachmentRead(BaseModel):
@@ -92,16 +114,47 @@ class SendMessageRequest(BaseModel):
     attachment_ids: list[int] = []
 
 
+def _validate_password(v: str) -> str:
+    min_len = settings.password_min_length
+    if min_len == 0:
+        return v
+    if len(v) < min_len:
+        raise ValueError(f"Password must be at least {min_len} characters")
+    if not re.search(r"[A-Za-z]", v):
+        raise ValueError("Password must contain at least one letter")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("Password must contain at least one digit")
+    return v
+
+
+def _validate_name(v: str) -> str:
+    stripped = v.strip()
+    if not stripped:
+        raise ValueError("Name cannot be blank")
+    return stripped
+
+
 class ProfileCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    password: str = Field(..., min_length=1)
+    password: str
     avatar: int = Field(default=0, ge=0, le=50)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        return _validate_name(v)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return _validate_password(v)
 
 
 class ProfileRead(BaseModel):
     id: int
     name: str
     avatar: int
+    avatar_color: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -118,8 +171,23 @@ class LoginResponse(BaseModel):
 
 class ProfileAvatarUpdate(BaseModel):
     avatar: int = Field(..., ge=0, le=50)
+    avatar_color: str | None = Field(default=None, max_length=20)
+
+
+class ProfileNameUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        return _validate_name(v)
 
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=1)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return _validate_password(v)

@@ -98,11 +98,27 @@ def calculate(expression: str) -> dict:
         }
     except ZeroDivisionError:
         msg = "division by zero"
-        return {"error": msg, "expression": expression, "text": f"Error evaluating '{expression}': {msg}"}
+        return {
+            "error": msg,
+            "expression": expression,
+            "text": f"Error evaluating '{expression}': {msg}",
+        }
     except (ValueError, TypeError) as exc:
-        return {"error": str(exc), "expression": expression, "text": f"Error evaluating '{expression}': {exc}"}
+        return {
+            "error": str(exc),
+            "expression": expression,
+            "text": f"Error evaluating '{expression}': {exc}",
+        }
     except SyntaxError:
         msg = "invalid syntax"
-        return {"error": msg, "expression": expression, "text": f"Error evaluating '{expression}': {msg}"}
+        return {
+            "error": msg,
+            "expression": expression,
+            "text": f"Error evaluating '{expression}': {msg}",
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc), "expression": expression, "text": f"Error evaluating '{expression}': {exc}"}
+        return {
+            "error": str(exc),
+            "expression": expression,
+            "text": f"Error evaluating '{expression}': {exc}",
+        }

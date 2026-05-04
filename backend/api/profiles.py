@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import create_token, get_current_profile, hash_password, verify_password
@@ -14,6 +14,7 @@ from ..schemas import (
     PasswordChange,
     ProfileAvatarUpdate,
     ProfileCreate,
+    ProfileNameUpdate,
     ProfileRead,
 )
 
@@ -31,15 +32,19 @@ def _can_create(request: Request) -> bool:
 
 @router.get("", response_model=list[ProfileRead])
 async def list_profiles(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Profile).order_by(Profile.created_at))
+    result = await db.execute(select(Profile).order_by(func.lower(Profile.name)))
     return result.scalars().all()
 
 
 @router.post("", response_model=ProfileRead, status_code=201)
-async def create_profile(request: Request, body: ProfileCreate, db: AsyncSession = Depends(get_db)):
+async def create_profile(
+    request: Request, body: ProfileCreate, db: AsyncSession = Depends(get_db)
+):
     if not _can_create(request):
         raise HTTPException(403, "Profile creation is not allowed from this address")
-    existing = await db.execute(select(Profile).where(Profile.name == body.name))
+    existing = await db.execute(
+        select(Profile).where(func.lower(Profile.name) == body.name.lower())
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Profile name already taken")
     profile = Profile(
@@ -55,7 +60,9 @@ async def create_profile(request: Request, body: ProfileCreate, db: AsyncSession
 
 
 @router.post("/{profile_id}/login", response_model=LoginResponse)
-async def login(profile_id: int, body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    profile_id: int, body: LoginRequest, db: AsyncSession = Depends(get_db)
+):
     profile = await db.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Profile not found")
@@ -63,7 +70,9 @@ async def login(profile_id: int, body: LoginRequest, db: AsyncSession = Depends(
         log_event(None, "login_failed", profile_id=profile_id)
         raise HTTPException(401, "Incorrect password")
     log_event(profile.name, "login")
-    return LoginResponse(token=create_token(profile.id), profile=ProfileRead.model_validate(profile))
+    return LoginResponse(
+        token=create_token(profile.id), profile=ProfileRead.model_validate(profile)
+    )
 
 
 @router.patch("/{profile_id}/avatar", response_model=ProfileRead)
@@ -76,9 +85,31 @@ async def update_avatar(
     if current.id != profile_id:
         raise HTTPException(403, "Cannot update another profile")
     current.avatar = body.avatar
+    current.avatar_color = body.avatar_color
     await db.commit()
     await db.refresh(current)
     log_event(current.name, "update_avatar")
+    return current
+
+
+@router.patch("/{profile_id}/name", response_model=ProfileRead)
+async def update_name(
+    profile_id: int,
+    body: ProfileNameUpdate,
+    current: Profile = Depends(get_current_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    if current.id != profile_id:
+        raise HTTPException(403, "Cannot update another profile")
+    existing = await db.execute(
+        select(Profile).where(func.lower(Profile.name) == body.name.lower())
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Profile name already taken")
+    current.name = body.name
+    await db.commit()
+    await db.refresh(current)
+    log_event(current.name, "update_name")
     return current
 
 

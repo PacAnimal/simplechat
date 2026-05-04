@@ -16,7 +16,9 @@ async def _collect_sse(response) -> list[dict]:
 
 
 async def test_stream_openai_message(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
@@ -40,13 +42,17 @@ async def test_stream_openai_message(client: AsyncClient):
 
 
 async def test_stream_anthropic_message(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"})
+    create = await client.post(
+        "/api/chats", json={"provider": "anthropic", "model": "claude-sonnet-4-6"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
         yield {"type": "text_delta", "content": "Hi there"}
 
-    with patch("backend.providers.anthropic_provider.AnthropicProvider._stream", mock_stream):
+    with patch(
+        "backend.providers.anthropic_provider.AnthropicProvider._stream", mock_stream
+    ):
         async with client.stream(
             "POST",
             f"/api/chats/{chat_id}/messages",
@@ -60,7 +66,9 @@ async def test_stream_anthropic_message(client: AsyncClient):
 
 
 async def test_stream_saves_messages(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
@@ -84,7 +92,9 @@ async def test_stream_saves_messages(client: AsyncClient):
 
 
 async def test_stream_auto_titles_chat(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     assert create.json()["title"] == "New Chat"
 
@@ -115,7 +125,9 @@ async def test_stream_missing_chat(client: AsyncClient):
 
 
 async def test_stream_image_generation(client: AsyncClient):
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
@@ -144,7 +156,9 @@ async def test_stream_image_generation(client: AsyncClient):
 
 async def test_stream_updates_chat_updated_at(client: AsyncClient):
     """updated_at must be bumped after every exchange, even when title is already set."""
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "fixed"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "fixed"}
+    )
     chat_id = create.json()["id"]
     before = create.json()["updated_at"]
 
@@ -166,7 +180,10 @@ async def test_stream_updates_chat_updated_at(client: AsyncClient):
 
 async def test_auto_title_does_not_fire_when_explicit_title_given(client: AsyncClient):
     """A chat created with an explicit title must keep it after the first exchange."""
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o", "title": "My Project"})
+    create = await client.post(
+        "/api/chats",
+        json={"provider": "openai", "model": "gpt-4o", "title": "My Project"},
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
@@ -187,7 +204,9 @@ async def test_auto_title_does_not_fire_when_explicit_title_given(client: AsyncC
 
 async def test_auto_title_does_not_fire_after_patch_title(client: AsyncClient):
     """Setting the title via PATCH, then sending a message, must not auto-retitle."""
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
     await client.patch(f"/api/chats/{chat_id}", json={"title": "Custom Title"})
 
@@ -209,14 +228,19 @@ async def test_auto_title_does_not_fire_after_patch_title(client: AsyncClient):
 
 async def test_auto_title_fires_only_once(client: AsyncClient):
     """Auto-title must not fire on the second message."""
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):
         yield {"type": "text_delta", "content": "ok"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
-        for content in ("First message sets the title", "Second message must not change it"):
+        for content in (
+            "First message sets the title",
+            "Second message must not change it",
+        ):
             async with client.stream(
                 "POST",
                 f"/api/chats/{chat_id}/messages",
@@ -231,7 +255,9 @@ async def test_auto_title_fires_only_once(client: AsyncClient):
 
 async def test_stream_error_event_on_provider_failure(client: AsyncClient):
     """A provider exception must produce an SSE error event, not a 500."""
-    create = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     chat_id = create.json()["id"]
 
     async def mock_stream(self, messages, model, web_search):

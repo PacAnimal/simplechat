@@ -1,4 +1,5 @@
 """Profile management and cross-profile isolation tests."""
+
 import pytest
 from httpx import AsyncClient
 
@@ -6,8 +7,11 @@ pytestmark = pytest.mark.asyncio
 
 # ─── helpers ───────────────────────────────────────────────────────────────────
 
+
 async def _register(c: AsyncClient, name: str, password: str, avatar: int) -> dict:
-    r = await c.post("/api/profiles", json={"name": name, "password": password, "avatar": avatar})
+    r = await c.post(
+        "/api/profiles", json={"name": name, "password": password, "avatar": avatar}
+    )
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -25,12 +29,15 @@ async def _auth_headers(c: AsyncClient, name: str, password: str) -> dict[str, s
 
 
 async def _create_chat(c: AsyncClient, headers: dict) -> int:
-    r = await c.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"}, headers=headers)
+    r = await c.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}, headers=headers
+    )
     assert r.status_code == 201, r.text
     return r.json()["id"]
 
 
 # ─── profile CRUD ──────────────────────────────────────────────────────────────
+
 
 async def test_list_profiles_empty(unauthed_client: AsyncClient):
     r = await unauthed_client.get("/api/profiles")
@@ -39,7 +46,9 @@ async def test_list_profiles_empty(unauthed_client: AsyncClient):
 
 
 async def test_create_profile(unauthed_client: AsyncClient):
-    r = await unauthed_client.post("/api/profiles", json={"name": "Alice", "password": "secret", "avatar": 3})
+    r = await unauthed_client.post(
+        "/api/profiles", json={"name": "Alice", "password": "secret1A", "avatar": 3}
+    )
     assert r.status_code == 201
     data = r.json()
     assert data["name"] == "Alice"
@@ -50,8 +59,8 @@ async def test_create_profile(unauthed_client: AsyncClient):
 
 
 async def test_list_profiles_shows_created(unauthed_client: AsyncClient):
-    await _register(unauthed_client, "Alice", "passA", avatar=0)
-    await _register(unauthed_client, "Bob", "passB", avatar=1)
+    await _register(unauthed_client, "Alice", "passWord1", avatar=0)
+    await _register(unauthed_client, "Bob", "passWord2", avatar=1)
     r = await unauthed_client.get("/api/profiles")
     assert r.status_code == 200
     names = [p["name"] for p in r.json()]
@@ -60,20 +69,24 @@ async def test_list_profiles_shows_created(unauthed_client: AsyncClient):
 
 
 async def test_duplicate_profile_name_rejected(unauthed_client: AsyncClient):
-    await _register(unauthed_client, "Alice", "first", avatar=0)
-    r = await unauthed_client.post("/api/profiles", json={"name": "Alice", "password": "second", "avatar": 0})
+    await _register(unauthed_client, "Alice", "firstPass1", avatar=0)
+    r = await unauthed_client.post(
+        "/api/profiles", json={"name": "Alice", "password": "secondP1", "avatar": 0}
+    )
     assert r.status_code == 409
 
 
-async def test_duplicate_profile_name_case_sensitive(unauthed_client: AsyncClient):
-    """Names are compared as-is; 'alice' and 'Alice' are currently distinct."""
-    await _register(unauthed_client, "Alice", "pass1", avatar=0)
-    r = await unauthed_client.post("/api/profiles", json={"name": "alice", "password": "pass2", "avatar": 0})
-    assert r.status_code == 201
+async def test_duplicate_profile_name_case_insensitive(unauthed_client: AsyncClient):
+    """Name uniqueness is case-insensitive; 'alice' and 'Alice' must conflict."""
+    await _register(unauthed_client, "Alice", "passWord1", avatar=0)
+    r = await unauthed_client.post(
+        "/api/profiles", json={"name": "alice", "password": "passWord2", "avatar": 0}
+    )
+    assert r.status_code == 409
 
 
 async def test_profile_password_not_exposed_in_list(unauthed_client: AsyncClient):
-    await _register(unauthed_client, "Alice", "supersecret", avatar=0)
+    await _register(unauthed_client, "Alice", "superSecret1", avatar=0)
     profiles = (await unauthed_client.get("/api/profiles")).json()
     alice = next(p for p in profiles if p["name"] == "Alice")
     assert "password" not in alice
@@ -82,26 +95,34 @@ async def test_profile_password_not_exposed_in_list(unauthed_client: AsyncClient
 
 # ─── login ─────────────────────────────────────────────────────────────────────
 
+
 async def test_login_correct_password_returns_token(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "correct", avatar=0)
-    r = await unauthed_client.post(f"/api/profiles/{p['id']}/login", json={"password": "correct"})
+    p = await _register(unauthed_client, "Alice", "correct1A", avatar=0)
+    r = await unauthed_client.post(
+        f"/api/profiles/{p['id']}/login", json={"password": "correct1A"}
+    )
     assert r.status_code == 200
     assert "token" in r.json()
     assert r.json()["profile"]["name"] == "Alice"
 
 
 async def test_login_wrong_password_rejected(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "correct", avatar=0)
-    r = await unauthed_client.post(f"/api/profiles/{p['id']}/login", json={"password": "wrong"})
+    p = await _register(unauthed_client, "Alice", "correct1A", avatar=0)
+    r = await unauthed_client.post(
+        f"/api/profiles/{p['id']}/login", json={"password": "wrong"}
+    )
     assert r.status_code == 401
 
 
 async def test_login_nonexistent_profile(unauthed_client: AsyncClient):
-    r = await unauthed_client.post("/api/profiles/99999/login", json={"password": "anything"})
+    r = await unauthed_client.post(
+        "/api/profiles/99999/login", json={"password": "anything"}
+    )
     assert r.status_code == 404
 
 
 # ─── unauthenticated access ────────────────────────────────────────────────────
+
 
 async def test_chats_require_auth(unauthed_client: AsyncClient):
     r = await unauthed_client.get("/api/chats")
@@ -109,7 +130,9 @@ async def test_chats_require_auth(unauthed_client: AsyncClient):
 
 
 async def test_create_chat_requires_auth(unauthed_client: AsyncClient):
-    r = await unauthed_client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r = await unauthed_client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
     assert r.status_code == 401
 
 
@@ -132,7 +155,9 @@ async def test_download_requires_auth(unauthed_client: AsyncClient):
 
 
 async def test_invalid_token_rejected(unauthed_client: AsyncClient):
-    r = await unauthed_client.get("/api/chats", headers={"Authorization": "Bearer notavalidtoken"})
+    r = await unauthed_client.get(
+        "/api/chats", headers={"Authorization": "Bearer notavalidtoken"}
+    )
     assert r.status_code == 401
 
 
@@ -140,23 +165,29 @@ async def test_expired_token_rejected(unauthed_client: AsyncClient):
     from datetime import datetime, timedelta, timezone
 
     import jwt
+
     payload = {"sub": "1", "exp": datetime.now(timezone.utc) - timedelta(days=1)}
-    token = jwt.encode(payload, "simplechat-dev-secret-change-in-production", algorithm="HS256")
-    r = await unauthed_client.get("/api/chats", headers={"Authorization": f"Bearer {token}"})
+    token = jwt.encode(
+        payload, "simplechat-dev-secret-change-in-production", algorithm="HS256"
+    )
+    r = await unauthed_client.get(
+        "/api/chats", headers={"Authorization": f"Bearer {token}"}
+    )
     assert r.status_code == 401
 
 
 # ─── authenticated access works ────────────────────────────────────────────────
 
+
 async def test_authenticated_can_list_chats(unauthed_client: AsyncClient):
-    headers = await _auth_headers(unauthed_client, "Alice", "alicepass")
+    headers = await _auth_headers(unauthed_client, "Alice", "alicePass1")
     r = await unauthed_client.get("/api/chats", headers=headers)
     assert r.status_code == 200
     assert r.json() == []
 
 
 async def test_authenticated_can_create_and_fetch_chat(unauthed_client: AsyncClient):
-    headers = await _auth_headers(unauthed_client, "Alice", "alicepass")
+    headers = await _auth_headers(unauthed_client, "Alice", "alicePass1")
     chat_id = await _create_chat(unauthed_client, headers)
     r = await unauthed_client.get(f"/api/chats/{chat_id}", headers=headers)
     assert r.status_code == 200
@@ -165,9 +196,10 @@ async def test_authenticated_can_create_and_fetch_chat(unauthed_client: AsyncCli
 
 # ─── cross-profile chat isolation ──────────────────────────────────────────────
 
+
 async def test_cross_profile_cannot_see_others_chats(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -178,8 +210,8 @@ async def test_cross_profile_cannot_see_others_chats(unauthed_client: AsyncClien
 
 
 async def test_cross_profile_cannot_get_others_chat(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -188,8 +220,8 @@ async def test_cross_profile_cannot_get_others_chat(unauthed_client: AsyncClient
 
 
 async def test_cross_profile_cannot_update_others_chat(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -200,8 +232,8 @@ async def test_cross_profile_cannot_update_others_chat(unauthed_client: AsyncCli
 
 
 async def test_cross_profile_cannot_delete_others_chat(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -214,8 +246,8 @@ async def test_cross_profile_cannot_delete_others_chat(unauthed_client: AsyncCli
 
 
 async def test_cross_profile_cannot_read_others_messages(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -223,9 +255,11 @@ async def test_cross_profile_cannot_read_others_messages(unauthed_client: AsyncC
     assert r.status_code == 404
 
 
-async def test_cross_profile_cannot_send_message_to_others_chat(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+async def test_cross_profile_cannot_send_message_to_others_chat(
+    unauthed_client: AsyncClient,
+):
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -239,8 +273,8 @@ async def test_cross_profile_cannot_send_message_to_others_chat(unauthed_client:
 
 async def test_chat_histories_are_separate(unauthed_client: AsyncClient):
     """Each profile sees exactly its own chats — no bleed-through."""
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     await _create_chat(unauthed_client, alice)
     await _create_chat(unauthed_client, alice)
@@ -259,9 +293,10 @@ async def test_chat_histories_are_separate(unauthed_client: AsyncClient):
 
 # ─── cross-profile file isolation ──────────────────────────────────────────────
 
+
 async def test_cross_profile_cannot_upload_to_others_chat(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
 
@@ -274,8 +309,8 @@ async def test_cross_profile_cannot_upload_to_others_chat(unauthed_client: Async
 
 
 async def test_cross_profile_cannot_list_others_files(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
     await unauthed_client.post(
@@ -289,8 +324,8 @@ async def test_cross_profile_cannot_list_others_files(unauthed_client: AsyncClie
 
 
 async def test_cross_profile_cannot_download_others_file(unauthed_client: AsyncClient):
-    alice = await _auth_headers(unauthed_client, "Alice", "alicepass")
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice = await _auth_headers(unauthed_client, "Alice", "alicePass1")
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     alice_chat = await _create_chat(unauthed_client, alice)
     upload = await unauthed_client.post(
@@ -306,9 +341,10 @@ async def test_cross_profile_cannot_download_others_file(unauthed_client: AsyncC
 
 # ─── cross-profile settings isolation ─────────────────────────────────────────
 
+
 async def test_cannot_update_another_profiles_avatar(unauthed_client: AsyncClient):
-    alice_profile = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice_profile = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     r = await unauthed_client.patch(
         f"/api/profiles/{alice_profile['id']}/avatar",
@@ -319,22 +355,24 @@ async def test_cannot_update_another_profiles_avatar(unauthed_client: AsyncClien
 
 
 async def test_cannot_change_another_profiles_password(unauthed_client: AsyncClient):
-    alice_profile = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice_profile = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
     r = await unauthed_client.post(
         f"/api/profiles/{alice_profile['id']}/change-password",
-        json={"current_password": "alicepass", "new_password": "hacked"},
+        json={"current_password": "alicePass1", "new_password": "hackPass1"},
         headers=bob,
     )
     assert r.status_code == 403
 
 
 async def test_cannot_delete_another_profile(unauthed_client: AsyncClient):
-    alice_profile = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    bob = await _auth_headers(unauthed_client, "Bob", "bobpass")
+    alice_profile = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    bob = await _auth_headers(unauthed_client, "Bob", "bobPass1")
 
-    r = await unauthed_client.delete(f"/api/profiles/{alice_profile['id']}", headers=bob)
+    r = await unauthed_client.delete(
+        f"/api/profiles/{alice_profile['id']}", headers=bob
+    )
     assert r.status_code == 403
 
     # Alice's profile is unaffected
@@ -344,9 +382,10 @@ async def test_cannot_delete_another_profile(unauthed_client: AsyncClient):
 
 # ─── own-profile settings ──────────────────────────────────────────────────────
 
+
 async def test_can_update_own_avatar(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    token = await _login(unauthed_client, p["id"], "alicepass")
+    p = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    token = await _login(unauthed_client, p["id"], "alicePass1")
     headers = {"Authorization": f"Bearer {token}"}
 
     r = await unauthed_client.patch(
@@ -357,42 +396,46 @@ async def test_can_update_own_avatar(unauthed_client: AsyncClient):
 
 
 async def test_can_change_own_password(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "oldpass", avatar=0)
-    token = await _login(unauthed_client, p["id"], "oldpass")
+    p = await _register(unauthed_client, "Alice", "oldPass1", avatar=0)
+    token = await _login(unauthed_client, p["id"], "oldPass1")
     headers = {"Authorization": f"Bearer {token}"}
 
     r = await unauthed_client.post(
         f"/api/profiles/{p['id']}/change-password",
-        json={"current_password": "oldpass", "new_password": "newpass"},
+        json={"current_password": "oldPass1", "new_password": "newPass1"},
         headers=headers,
     )
     assert r.status_code == 204
 
     # old password no longer valid
-    r2 = await unauthed_client.post(f"/api/profiles/{p['id']}/login", json={"password": "oldpass"})
+    r2 = await unauthed_client.post(
+        f"/api/profiles/{p['id']}/login", json={"password": "oldPass1"}
+    )
     assert r2.status_code == 401
 
     # new password works
-    r3 = await unauthed_client.post(f"/api/profiles/{p['id']}/login", json={"password": "newpass"})
+    r3 = await unauthed_client.post(
+        f"/api/profiles/{p['id']}/login", json={"password": "newPass1"}
+    )
     assert r3.status_code == 200
 
 
 async def test_change_password_wrong_current_rejected(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "correct", avatar=0)
-    token = await _login(unauthed_client, p["id"], "correct")
+    p = await _register(unauthed_client, "Alice", "correct1A", avatar=0)
+    token = await _login(unauthed_client, p["id"], "correct1A")
     headers = {"Authorization": f"Bearer {token}"}
 
     r = await unauthed_client.post(
         f"/api/profiles/{p['id']}/change-password",
-        json={"current_password": "wrong", "new_password": "newpass"},
+        json={"current_password": "wrong", "new_password": "newPass1"},
         headers=headers,
     )
     assert r.status_code == 400
 
 
 async def test_can_delete_own_profile(unauthed_client: AsyncClient):
-    p = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    token = await _login(unauthed_client, p["id"], "alicepass")
+    p = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    token = await _login(unauthed_client, p["id"], "alicePass1")
     headers = {"Authorization": f"Bearer {token}"}
 
     r = await unauthed_client.delete(f"/api/profiles/{p['id']}", headers=headers)
@@ -404,8 +447,8 @@ async def test_can_delete_own_profile(unauthed_client: AsyncClient):
 
 async def test_deleting_profile_removes_its_chats(unauthed_client: AsyncClient):
     """Cascade: all of a profile's chats are gone when the profile is deleted."""
-    p = await _register(unauthed_client, "Alice", "alicepass", avatar=0)
-    token = await _login(unauthed_client, p["id"], "alicepass")
+    p = await _register(unauthed_client, "Alice", "alicePass1", avatar=0)
+    token = await _login(unauthed_client, p["id"], "alicePass1")
     headers = {"Authorization": f"Bearer {token}"}
 
     chat_id = await _create_chat(unauthed_client, headers)
@@ -423,15 +466,16 @@ async def test_deleting_profile_removes_its_chats(unauthed_client: AsyncClient):
 
 # ─── avatar index validation ───────────────────────────────────────────────────
 
+
 async def test_invalid_avatar_index_rejected(unauthed_client: AsyncClient):
     r = await unauthed_client.post(
-        "/api/profiles", json={"name": "Alice", "password": "alicepass", "avatar": 100}
+        "/api/profiles", json={"name": "Alice", "password": "alicePass1", "avatar": 100}
     )
     assert r.status_code == 422
 
 
 async def test_negative_avatar_rejected(unauthed_client: AsyncClient):
     r = await unauthed_client.post(
-        "/api/profiles", json={"name": "Alice", "password": "alicepass", "avatar": -1}
+        "/api/profiles", json={"name": "Alice", "password": "alicePass1", "avatar": -1}
     )
     assert r.status_code == 422

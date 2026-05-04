@@ -87,6 +87,7 @@ async def test_upload_missing_chat(client: AsyncClient):
 async def test_delete_chat_removes_uploaded_file(client: AsyncClient):
     """Uploaded files must be deleted from disk when their chat is deleted."""
     import os
+
     chat_id = await _create_chat(client)
 
     r = await client.post(
@@ -101,6 +102,7 @@ async def test_delete_chat_removes_uploaded_file(client: AsyncClient):
 
     # capture the uploads dir before deletion
     from backend.config import settings
+
     before = set(os.listdir(settings.uploads_dir))
 
     del_r = await client.delete(f"/api/chats/{chat_id}")
@@ -108,7 +110,9 @@ async def test_delete_chat_removes_uploaded_file(client: AsyncClient):
 
     # at least one file should have disappeared from disk
     after = set(os.listdir(settings.uploads_dir))
-    assert len(after) < len(before), "uploaded file was not removed from disk on chat delete"
+    assert len(after) < len(before), (
+        "uploaded file was not removed from disk on chat delete"
+    )
 
 
 async def test_upload_file_timestamps_include_timezone(client: AsyncClient):

@@ -35,7 +35,9 @@ async def get_current_profile(
     db: AsyncSession = Depends(get_db),
 ) -> Profile:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid authorization header"
+        )
     token = authorization[7:]
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[_ALGORITHM])

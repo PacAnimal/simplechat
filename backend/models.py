@@ -23,6 +23,7 @@ def utcnow():
 
 class UTCDateTime(TypeDecorator):
     """DateTime that always returns timezone-aware UTC datetimes."""
+
     impl = DateTime
     cache_ok = True
 
@@ -44,6 +45,7 @@ class Profile(Base):
     name = Column(String(100), nullable=False)
     password_hash = Column(String(255), nullable=False)
     avatar = Column(Integer, nullable=False, default=0)
+    avatar_color = Column(String(20), nullable=True)
     created_at = Column(UTCDateTime, default=utcnow)
 
     chats = relationship("Chat", back_populates="profile", cascade="all, delete-orphan")
@@ -65,9 +67,18 @@ class Chat(Base):
     updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     profile = relationship("Profile", back_populates="chats")
-    messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan", order_by="Message.created_at")
-    attachments = relationship("Attachment", back_populates="chat", cascade="all, delete-orphan")
-    generated_images = relationship("GeneratedImage", back_populates="chat", cascade="all, delete-orphan")
+    messages = relationship(
+        "Message",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+    attachments = relationship(
+        "Attachment", back_populates="chat", cascade="all, delete-orphan"
+    )
+    generated_images = relationship(
+        "GeneratedImage", back_populates="chat", cascade="all, delete-orphan"
+    )
 
 
 class Message(Base):
@@ -77,6 +88,7 @@ class Message(Base):
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False, default="")
+    thinking = Column(Text, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow)
 
     chat = relationship("Chat", back_populates="messages")

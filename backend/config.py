@@ -1,4 +1,3 @@
-
 from typing import Literal
 
 from pydantic_settings import BaseSettings
@@ -18,6 +17,12 @@ class Settings(BaseSettings):
     create: Literal["local", "any", "none"] = "local"
     # trust X-Forwarded-For / X-Forwarded-Proto from a local reverse proxy
     incoming_http_proxy: bool = False
+    # minimum password length; 0 disables all password complexity requirements
+    password_min_length: int = 8
+    # comma-separated allowlist of model IDs; empty = allow all
+    allowed_models: str = ""
+    # image generation model (OpenAI)
+    image_model: str = "gpt-image-2"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

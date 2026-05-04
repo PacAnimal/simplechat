@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { ArrowUpIcon, PaperclipIcon, GlobeIcon, XIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import { formatBytes } from "../lib/utils";
@@ -27,6 +27,19 @@ export default function MessageInput({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (pendingCursorRef.current !== null && textareaRef.current) {
+      const pos = pendingCursorRef.current;
+      pendingCursorRef.current = null;
+      textareaRef.current.selectionStart = pos;
+      textareaRef.current.selectionEnd = pos;
+      const el = textareaRef.current;
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+    }
+  });
 
   // sync initial value when it first arrives (suggestion card path)
   useEffect(() => {
@@ -59,19 +72,13 @@ export default function MessageInput({
       handleSend();
       return;
     }
-    if (e.key === "Enter" && e.ctrlKey) {
+    if (e.key === "Enter" && (e.shiftKey || e.ctrlKey)) {
       e.preventDefault();
       const el = e.currentTarget;
       const start = el.selectionStart ?? text.length;
       const end = el.selectionEnd ?? text.length;
-      const newVal = text.slice(0, start) + "\n" + text.slice(end);
-      setText(newVal);
-      requestAnimationFrame(() => {
-        el.selectionStart = start + 1;
-        el.selectionEnd = start + 1;
-        el.style.height = "auto";
-        el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
-      });
+      pendingCursorRef.current = start + 1;
+      setText(text.slice(0, start) + "\n" + text.slice(end));
     }
   }
 

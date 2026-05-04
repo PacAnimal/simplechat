@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { XIcon, SparklesIcon } from "lucide-react";
 import { api } from "../lib/api";
 import type { Chat } from "../types";
-import { MODELS, PROVIDER_LABELS } from "../types";
+import { PROVIDER_LABELS } from "../types";
 
 interface Props {
   onCreated: (chat: Chat) => void;
@@ -21,7 +21,7 @@ function getLastProvider(): "openai" | "anthropic" {
   try {
     const v = localStorage.getItem(LAST_PROVIDER_KEY);
     if (v === "openai" || v === "anthropic") return v;
-  } catch { /* localStorage unavailable (e.g. private browsing) */ }
+  } catch { /* ignore */ }
   return "anthropic";
 }
 
@@ -33,20 +33,36 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   const { data: remoteModels } = useQuery({
     queryKey: ["models"],
     queryFn: api.getModels,
-    staleTime: 3_600_000, // 1 hour
+    staleTime: 3_600_000,
   });
 
-  const modelsFor = (p: "openai" | "anthropic") => {
-    const live = remoteModels?.[p];
-    if (live?.length) return live.map((m) => ({ label: m.label, value: m.id }));
-    return MODELS[p];
-  };
+  // models for a provider: only use live data once fetched; [] means not configured
+  function modelsFor(p: "openai" | "anthropic") {
+    if (!remoteModels) return null; // still loading
+    return (remoteModels[p] ?? []).map((m) => ({ label: m.label, value: m.id }));
+  }
 
-  // sync model when provider or remote models change
+  const availableProviders = (["openai", "anthropic"] as const).filter((p) => {
+    const m = modelsFor(p);
+    return m === null || m.length > 0; // null = loading, show optimistically
+  });
+
+  // when live data arrives, switch away from any now-unavailable provider
   useEffect(() => {
-    const options = modelsFor(provider);
-    if (!model || !options.find((o) => o.value === model)) {
-      setModel(options[0]?.value ?? ""); // eslint-disable-line react-hooks/set-state-in-effect
+    if (!remoteModels) return;
+    const available = (["openai", "anthropic"] as const).filter(
+      (p) => (remoteModels[p] ?? []).length > 0,
+    );
+    if (available.length > 0 && !available.includes(provider)) {
+      setProvider(available[0]);
+    }
+  }, [remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // sync selected model when provider or model list changes
+  useEffect(() => {
+    const options = modelsFor(provider) ?? [];
+    if (options.length > 0 && !options.find((o) => o.value === model)) {
+      setModel(options[0].value);
     }
   }, [provider, remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -61,18 +77,17 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   function handleProviderChange(p: "openai" | "anthropic") {
     setProvider(p);
     try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch { /* ignore */ }
-    const options = modelsFor(p);
+    const options = modelsFor(p) ?? [];
     setModel(options[0]?.value ?? "");
   }
 
-  // close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const options = modelsFor(provider);
+  const options = modelsFor(provider) ?? [];
 
   return (
     <div
@@ -81,7 +96,6 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
       data-testid="new-chat-dialog"
     >
       <div className="bg-elevated border border-border w-full max-w-sm rounded-2xl shadow-2xl animate-fade-in">
-        {/* header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border">
           <div className="flex items-center gap-2">
             <SparklesIcon size={16} className="text-accent" />
@@ -96,29 +110,31 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
         </div>
 
         <div className="px-5 py-5 space-y-5">
-          {/* provider */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2.5">
-              Provider
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["openai", "anthropic"] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handleProviderChange(p)}
-                  className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-xl border text-sm font-medium transition-all ${
-                    provider === p
-                      ? "border-accent bg-accent/10 text-accent shadow-sm"
-                      : "border-border text-secondary hover:border-accent/40 hover:text-primary"
-                  }`}
-                  data-testid={`provider-${p}`}
-                >
-                  <span>{PROVIDER_ICONS[p]}</span>
-                  <span>{PROVIDER_LABELS[p]}</span>
-                </button>
-              ))}
+          {/* provider — only show configured providers */}
+          {availableProviders.length > 1 && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2.5">
+                Provider
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {availableProviders.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => handleProviderChange(p)}
+                    className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-xl border text-sm font-medium transition-all ${
+                      provider === p
+                        ? "border-accent bg-accent/10 text-accent shadow-sm"
+                        : "border-border text-secondary hover:border-accent/40 hover:text-primary"
+                    }`}
+                    data-testid={`provider-${p}`}
+                  >
+                    <span>{PROVIDER_ICONS[p]}</span>
+                    <span>{PROVIDER_LABELS[p]}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* model */}
           <div>
@@ -146,7 +162,6 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
             </div>
           </div>
 
-          {/* create button */}
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || !model}

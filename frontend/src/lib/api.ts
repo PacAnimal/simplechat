@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Message, Profile, StreamEvent } from "../types";
+import type { Attachment, Chat, Message, MessageSearchResult, Profile, StreamEvent } from "../types";
 
 const BASE = "/api";
 const TOKEN_KEY = "simplechat_token";
@@ -56,7 +56,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
-  getConfig: () => req<{ can_create_profile: boolean }>("GET", "/config"),
+  getConfig: () => req<{ can_create_profile: boolean; password_min_length: number }>("GET", "/config"),
   // profiles (no auth required)
   listProfiles: () => req<Profile[]>("GET", "/profiles"),
   createProfile: (name: string, password: string, avatar: number) =>
@@ -64,8 +64,10 @@ export const api = {
   loginProfile: (profileId: number, password: string) =>
     req<{ token: string; profile: Profile }>("POST", `/profiles/${profileId}/login`, { password }),
   deleteProfile: (profileId: number) => req<void>("DELETE", `/profiles/${profileId}`),
-  updateAvatar: (profileId: number, avatar: number) =>
-    req<Profile>("PATCH", `/profiles/${profileId}/avatar`, { avatar }),
+  updateAvatar: (profileId: number, avatar: number, avatar_color: string | null) =>
+    req<Profile>("PATCH", `/profiles/${profileId}/avatar`, { avatar, avatar_color }),
+  updateProfileName: (profileId: number, name: string) =>
+    req<Profile>("PATCH", `/profiles/${profileId}/name`, { name }),
   changePassword: (profileId: number, current_password: string, new_password: string) =>
     req<void>("POST", `/profiles/${profileId}/change-password`, { current_password, new_password }),
 
@@ -80,6 +82,7 @@ export const api = {
   updateChat: (id: number, patch: Partial<Chat>) => req<Chat>("PATCH", `/chats/${id}`, patch),
   deleteChat: (id: number) => req<void>("DELETE", `/chats/${id}`),
   getMessages: (chatId: number) => req<Message[]>("GET", `/chats/${chatId}/messages`),
+  searchMessages: (q: string) => req<MessageSearchResult[]>("GET", `/chats/messages/search?q=${encodeURIComponent(q)}`),
   uploadFile: async (chatId: number, file: File): Promise<Attachment> => {
     const form = new FormData();
     form.append("file", file);

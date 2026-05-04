@@ -163,13 +163,14 @@ function ProfileCard({ profile, onClick }: { profile: Profile; onClick: () => vo
   );
 }
 
-export function Avatar({ profile, size = "md" }: { profile: Profile; size?: "sm" | "md" | "lg" }) {
+export function Avatar({ profile, size = "md", colorOverride }: { profile: Profile; size?: "sm" | "md" | "lg"; colorOverride?: string }) {
   const av = AVATARS[profile.avatar % AVATARS.length];
+  const bg = colorOverride ?? profile.avatar_color ?? av.bg;
   const sizeClass = size === "lg" ? "w-20 h-20 text-[3.5rem]" : size === "sm" ? "w-7 h-7 text-xl" : "w-16 h-16 text-[3rem]";
   return (
     <div
       className={`${sizeClass} rounded-full flex items-center justify-center select-none flex-shrink-0`}
-      style={{ backgroundColor: av.bg }}
+      style={{ backgroundColor: bg }}
     >
       {av.emoji}
     </div>

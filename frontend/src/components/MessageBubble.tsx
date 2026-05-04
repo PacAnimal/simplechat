@@ -6,7 +6,7 @@ import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 import {
   XIcon, ChevronDownIcon, ChevronRightIcon,
-  CheckIcon, LoaderIcon, GlobeIcon, ImageIcon, CopyIcon,
+  CheckIcon, LoaderIcon, GlobeIcon, ImageIcon, CopyIcon, AlertCircleIcon,
 } from "lucide-react";
 import type { Message, InlineImage, ToolCallRecord } from "../types";
 
@@ -142,6 +142,7 @@ export default function MessageBubble({ message, images = message.images ?? [] }
         <p className="text-xs font-semibold text-muted mb-1.5">
           {isUser ? "You" : "Assistant"}
         </p>
+        {!isUser && message.thinking && <ThinkingBubble content={message.thinking} />}
         {isUser ? (
           <p className="text-[0.9375rem] text-primary leading-[1.7] whitespace-pre-wrap">
             {message.content}
@@ -228,14 +229,18 @@ export function ToolCallsBubble({ calls }: { calls: ToolCallRecord[] }) {
           <div
             key={i}
             className={`flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-              call.done
+              call.error
+                ? "border-red-400/30 text-red-400 bg-red-400/5"
+                : call.done
                 ? "border-border/40 text-muted bg-elevated/30"
                 : "border-accent/30 text-accent bg-accent/5"
             }`}
           >
             <ToolIcon name={call.name} />
             <span>{TOOL_LABELS[call.name] ?? call.name}</span>
-            {call.done ? (
+            {call.error ? (
+              <AlertCircleIcon size={11} className="ml-auto" />
+            ) : call.done ? (
               <CheckIcon size={11} className="ml-auto text-muted" />
             ) : (
               <LoaderIcon size={11} className="ml-auto animate-spin" />
