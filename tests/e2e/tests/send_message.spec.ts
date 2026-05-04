@@ -58,6 +58,31 @@ test("image generation request shows image inline", async ({ page }) => {
   ).toBeVisible({ timeout: 15_000 });
 });
 
+test("clicking inline image opens lightbox", async ({ page }) => {
+  await createChat(page, "openai");
+  await sendMessage(page, "Please draw a picture of a cat");
+
+  const img = page.getByTestId("message-assistant").first().locator('[data-testid="generated-image"]');
+  await expect(img).toBeVisible({ timeout: 15_000 });
+  await img.click();
+
+  await expect(page.getByTestId("image-lightbox")).toBeVisible({ timeout: 3_000 });
+});
+
+test("clicking overlay outside image closes the lightbox", async ({ page }) => {
+  await createChat(page, "openai");
+  await sendMessage(page, "Please draw a picture of a cat");
+
+  const img = page.getByTestId("message-assistant").first().locator('[data-testid="generated-image"]');
+  await expect(img).toBeVisible({ timeout: 15_000 });
+  await img.click();
+  await expect(page.getByTestId("image-lightbox")).toBeVisible({ timeout: 3_000 });
+
+  // click the overlay in the top-left corner, well outside the image
+  await page.mouse.click(10, 10);
+  await expect(page.getByTestId("image-lightbox")).not.toBeVisible({ timeout: 3_000 });
+});
+
 // ---- auto-titling ----
 
 test("chat gets auto-titled from first message", async ({ page }) => {

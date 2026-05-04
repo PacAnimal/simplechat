@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CheckIcon, CopyIcon } from "lucide-react";
 
 function sanitizeSvg(svg: string): string {
   return svg
@@ -10,6 +11,7 @@ function sanitizeSvg(svg: string): string {
 
 export default function SvgCanvas({ svg }: { svg: string }) {
   const [darkBg, setDarkBg] = useState(false);
+  const [copied, setCopied] = useState(false);
   const clean = sanitizeSvg(svg);
 
   useEffect(() => {
@@ -43,9 +45,18 @@ export default function SvgCanvas({ svg }: { svg: string }) {
     img.src = url;
   }, [clean]);
 
+  async function copySvg(e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(svg);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  }
+
   return (
     <div
-      className={`rounded-xl p-4 my-3 flex items-center justify-center overflow-hidden transition-colors ${
+      className={`relative group rounded-xl p-4 my-3 flex items-center justify-center overflow-hidden transition-colors ${
         darkBg ? "bg-black" : "bg-neutral-500/25"
       }`}
     >
@@ -53,6 +64,13 @@ export default function SvgCanvas({ svg }: { svg: string }) {
         className="max-w-full [&>svg]:max-w-full [&>svg]:h-auto"
         dangerouslySetInnerHTML={{ __html: clean }}
       />
+      <button
+        onClick={copySvg}
+        className="absolute top-2 right-2 p-1.5 rounded-md bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+        title="Copy SVG"
+      >
+        {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+      </button>
     </div>
   );
 }

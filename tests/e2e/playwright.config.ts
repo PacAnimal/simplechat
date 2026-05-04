@@ -27,7 +27,7 @@ export default defineConfig({
   webServer: [
     {
       // always start fresh so STUB_PROVIDERS is guaranteed
-      command: `STUB_PROVIDERS=true DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/e2e_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" ${ROOT}/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `STUB_PROVIDERS=true RESET_SECRET=e2e-stub-secret DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/e2e_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" ${ROOT}/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       url: `http://127.0.0.1:${BACKEND_PORT}/api/chats`,
       cwd: ROOT,
       reuseExistingServer: false,

@@ -4,7 +4,9 @@ export const BACKEND = "http://127.0.0.1:8084";
 
 export async function resetDB() {
   const ctx = await request.newContext();
-  await ctx.post(`${BACKEND}/api/test/reset`);
+  await ctx.post(`${BACKEND}/api/test/reset`, {
+    headers: { "X-Reset-Secret": "e2e-stub-secret" },
+  });
   await ctx.dispose();
 }
 

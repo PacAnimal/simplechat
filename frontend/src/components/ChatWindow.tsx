@@ -4,7 +4,7 @@ import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon } from "lucide-react
 import { api, streamMessage } from "../lib/api";
 import type { Chat, Message, ToolCallRecord } from "../types";
 import { MODELS, PROVIDER_LABELS } from "../types";
-import MessageBubble, { StreamingBubble, ThinkingBubble, ToolCallsBubble } from "./MessageBubble";
+import MessageBubble, { StreamingBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
 
 interface Props {
@@ -272,11 +272,12 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
             ))}
 
             {streaming && (
-              <>
-                {streaming.thinking && <ThinkingBubble content={streaming.thinking} />}
-                {streaming.toolCalls.length > 0 && <ToolCallsBubble calls={streaming.toolCalls} />}
-                <StreamingBubble content={streaming.content} images={streaming.images} />
-              </>
+              <StreamingBubble
+                content={streaming.content}
+                images={streaming.images}
+                thinking={streaming.thinking || undefined}
+                toolCalls={streaming.toolCalls.length > 0 ? streaming.toolCalls : undefined}
+              />
             )}
 
             {streamError && (

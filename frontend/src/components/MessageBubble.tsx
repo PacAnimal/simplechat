@@ -93,10 +93,38 @@ function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
   );
 }
 
+function HoverCopyButton({ onCopy, className = "" }: { onCopy: () => void; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button
+      onClick={handleClick}
+      className={`absolute top-2 right-2 p-1.5 rounded-md bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-colors opacity-0 group-hover:opacity-100 ${className}`}
+      title="Copy"
+    >
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+    </button>
+  );
+}
+
 function ImageThumbnail({ img, onClick }: { img: InlineImage; onClick: () => void }) {
   const src = useAuthedBlobUrl(img.url);
+
+  async function copyImage() {
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    } catch { /* clipboard unavailable */ }
+  }
+
   return (
-    <div className="mt-4">
+    <div className="mt-4 relative group inline-block">
       <img
         src={src}
         alt={img.prompt}
@@ -105,6 +133,7 @@ function ImageThumbnail({ img, onClick }: { img: InlineImage; onClick: () => voi
         onClick={onClick}
         data-testid="generated-image"
       />
+      <HoverCopyButton onCopy={copyImage} />
       <p className="text-xs text-muted mt-1.5 italic">{img.prompt}</p>
     </div>
   );
@@ -254,7 +283,7 @@ export default function MessageBubble({ message, images = message.images ?? [] }
         <p className="text-xs font-semibold text-muted mb-1.5">
           {isUser ? "You" : "Assistant"}
         </p>
-        {!isUser && message.thinking && <ThinkingBubble content={message.thinking} />}
+        {!isUser && message.thinking && <ThinkingPanel content={message.thinking} />}
         {isUser ? (
           <p className="text-[0.9375rem] text-primary leading-[1.7] whitespace-pre-wrap">
             {message.content}
@@ -273,22 +302,40 @@ export default function MessageBubble({ message, images = message.images ?? [] }
   );
 }
 
-export function StreamingBubble({ content, images }: { content: string; images: InlineImage[] }) {
+export function StreamingBubble({
+  content,
+  images,
+  thinking,
+  toolCalls,
+}: {
+  content: string;
+  images: InlineImage[];
+  thinking?: string;
+  toolCalls?: ToolCallRecord[];
+}) {
   return (
     <div className="flex gap-3 max-w-3xl w-full mx-auto animate-fade-in">
       <Avatar role="assistant" />
       <div className="flex-1 min-w-0 pt-0.5">
         <p className="text-xs font-semibold text-muted mb-1.5">Assistant</p>
-        <div className="prose-chat">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={markdownComponents}
-          >
-            {content || "​"}
-          </ReactMarkdown>
-          <span className="cursor-blink" />
-        </div>
+        {thinking && <ThinkingPanel content={thinking} />}
+        {toolCalls && toolCalls.length > 0 && <ToolCallsPanel calls={toolCalls} />}
+        {content ? (
+          <div className="prose-chat">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={markdownComponents}
+            >
+              {content}
+            </ReactMarkdown>
+            <span className="cursor-blink" />
+          </div>
+        ) : (
+          <p className="text-[0.9375rem] leading-[1.7]">
+            <span className="cursor-blink" />
+          </p>
+        )}
         <ImageGrid images={images} />
       </div>
     </div>
@@ -306,25 +353,63 @@ function ToolIcon({ name }: { name: string }) {
   return null;
 }
 
-export function ThinkingBubble({ content }: { content: string }) {
+// inner panel variants — no outer flex/spacer, designed for use inside a bubble's content area
+
+function ThinkingPanel({ content }: { content: string }) {
   const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-border/50 rounded-xl bg-elevated/50 text-xs text-muted overflow-hidden mb-2" data-testid="thinking-bubble">
+      <button
+        className="flex items-center gap-1.5 px-3 py-2 w-full text-left hover:text-primary transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+        <span className="font-medium">Thinking…</span>
+      </button>
+      {open && (
+        <pre className="px-3 pb-3 whitespace-pre-wrap font-mono text-[0.7rem] leading-relaxed text-muted/80 max-h-48 overflow-y-auto">
+          {content}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ToolCallsPanel({ calls }: { calls: ToolCallRecord[] }) {
+  return (
+    <div className="flex flex-col gap-1 mb-2" data-testid="tool-calls-bubble">
+      {calls.map((call, i) => (
+        <div
+          key={i}
+          className={`flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+            call.error
+              ? "border-red-400/30 text-red-400 bg-red-400/5"
+              : call.done
+              ? "border-border/40 text-muted bg-elevated/30"
+              : "border-accent/30 text-accent bg-accent/5"
+          }`}
+        >
+          <ToolIcon name={call.name} />
+          <span>{TOOL_LABELS[call.name] ?? call.name}</span>
+          {call.error ? (
+            <AlertCircleIcon size={11} className="ml-auto" />
+          ) : call.done ? (
+            <CheckIcon size={11} className="ml-auto text-muted" />
+          ) : (
+            <LoaderIcon size={11} className="ml-auto animate-spin" />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// kept for API compatibility — now delegates to the inner panel variants
+export function ThinkingBubble({ content }: { content: string }) {
   return (
     <div className="flex gap-3 max-w-3xl w-full mx-auto" data-testid="thinking-bubble">
       <div className="w-7 h-7 flex-shrink-0" />
-      <div className="border border-border/50 rounded-xl bg-elevated/50 text-xs text-muted overflow-hidden">
-        <button
-          className="flex items-center gap-1.5 px-3 py-2 w-full text-left hover:text-primary transition-colors"
-          onClick={() => setOpen((o) => !o)}
-        >
-          {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-          <span className="font-medium">Thinking…</span>
-        </button>
-        {open && (
-          <pre className="px-3 pb-3 whitespace-pre-wrap font-mono text-[0.7rem] leading-relaxed text-muted/80 max-h-48 overflow-y-auto">
-            {content}
-          </pre>
-        )}
-      </div>
+      <ThinkingPanel content={content} />
     </div>
   );
 }
@@ -333,30 +418,7 @@ export function ToolCallsBubble({ calls }: { calls: ToolCallRecord[] }) {
   return (
     <div className="flex gap-3 max-w-3xl w-full mx-auto" data-testid="tool-calls-bubble">
       <div className="w-7 h-7 flex-shrink-0" />
-      <div className="flex flex-col gap-1">
-        {calls.map((call, i) => (
-          <div
-            key={i}
-            className={`flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-              call.error
-                ? "border-red-400/30 text-red-400 bg-red-400/5"
-                : call.done
-                ? "border-border/40 text-muted bg-elevated/30"
-                : "border-accent/30 text-accent bg-accent/5"
-            }`}
-          >
-            <ToolIcon name={call.name} />
-            <span>{TOOL_LABELS[call.name] ?? call.name}</span>
-            {call.error ? (
-              <AlertCircleIcon size={11} className="ml-auto" />
-            ) : call.done ? (
-              <CheckIcon size={11} className="ml-auto text-muted" />
-            ) : (
-              <LoaderIcon size={11} className="ml-auto animate-spin" />
-            )}
-          </div>
-        ))}
-      </div>
+      <ToolCallsPanel calls={calls} />
     </div>
   );
 }

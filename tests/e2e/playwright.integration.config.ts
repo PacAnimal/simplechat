@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `ALLOW_RESET=true DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/integration_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" ${ROOT}/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `ALLOW_RESET=true RESET_SECRET=e2e-integration-secret DATABASE_URL="sqlite+aiosqlite:///${ROOT}/data/integration_test.db" UPLOADS_DIR="${ROOT}/uploads" GENERATED_DIR="${ROOT}/generated" ${ROOT}/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       url: `http://127.0.0.1:${BACKEND_PORT}/api/chats`,
       cwd: ROOT,
       reuseExistingServer: false,
