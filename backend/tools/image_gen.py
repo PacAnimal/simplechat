@@ -13,7 +13,13 @@ async def generate_image(prompt: str, size: str = "1024x1024", image_path: str |
         raise ValueError("OPENAI_API_KEY is not configured")
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    valid_sizes = {"1024x1024", "1536x1024", "1024x1536"}
+    # dall-e-3 uses 1792x1024 / 1024x1792; gpt-image-* uses 1536x1024 / 1024x1536
+    if settings.image_model.startswith("dall-e"):
+        _size_map = {"1536x1024": "1792x1024", "1024x1536": "1024x1792"}
+        size = _size_map.get(size, size)
+        valid_sizes = {"1024x1024", "1792x1024", "1024x1792"}
+    else:
+        valid_sizes = {"1024x1024", "1536x1024", "1024x1536"}
     if size not in valid_sizes:
         size = "1024x1024"
 

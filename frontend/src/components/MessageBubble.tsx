@@ -67,25 +67,26 @@ function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-8"
       onClick={onClose}
       data-testid="image-lightbox"
     >
-      <div className="relative" onClick={(e) => e.stopPropagation()}>
-        <button
-          className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center z-10 transition-colors"
-          onClick={onClose}
-          data-testid="image-lightbox-close"
-        >
-          <XIcon size={16} />
-        </button>
+      <button
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center z-10 transition-colors"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        data-testid="image-lightbox-close"
+      >
+        <XIcon size={16} />
+      </button>
+      <div className="flex flex-col items-center">
         <img
           src={src}
           alt={img.prompt}
-          className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl"
+          className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl block"
+          onClick={(e) => e.stopPropagation()}
         />
         {img.prompt && (
-          <p className="text-xs text-white/60 mt-2 text-center">{img.prompt}</p>
+          <p className="text-xs text-white/60 mt-2 text-center max-w-[90vw]">{img.prompt}</p>
         )}
       </div>
     </div>,

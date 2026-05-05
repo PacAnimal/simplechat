@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon } from "lucide-react";
-import { api, streamMessage } from "../lib/api";
-import type { Chat, Message, ToolCallRecord } from "../types";
+import { api } from "../lib/api";
+import { useStream } from "../lib/StreamContext";
+import type { Chat, Message } from "../types";
 import { MODELS, PROVIDER_LABELS } from "../types";
 import MessageBubble, { StreamingBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
@@ -10,13 +11,6 @@ import MessageInput from "./MessageInput";
 interface Props {
   chatId: number;
   initialMessage?: string;
-}
-
-interface StreamingState {
-  content: string;
-  images: { url: string; prompt: string }[];
-  thinking: string;
-  toolCalls: ToolCallRecord[];
 }
 
 function ModelSwitcher({ chatId, provider, model, disabled }: {
@@ -104,10 +98,12 @@ function ModelSwitcher({ chatId, provider, model, disabled }: {
 export default function ChatWindow({ chatId, initialMessage }: Props) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const [streaming, setStreaming] = useState<StreamingState | null>(null);
-  const [sending, setSending] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
+  const { activeStreams, unreadChats, startStream, cancelStream, markRead } = useStream();
+
+  const stream = activeStreams.get(chatId);
+  const sending = stream?.status === "streaming";
+  const streamError = stream?.status === "error" ? (stream.error ?? "Something went wrong.") : null;
+
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", chatId],
     queryFn: () => api.getMessages(chatId),
@@ -127,22 +123,24 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
     },
   });
 
-  // abort on unmount
+  // dismiss notification when this chat is open
   useEffect(() => {
-    return () => { abortRef.current?.abort(); };
-  }, []);
+    markRead(chatId);
+  }, [chatId, markRead]);
+
+  // also dismiss if notification fires while we're here
+  const isUnread = unreadChats.has(chatId);
+  useEffect(() => {
+    if (isUnread) markRead(chatId);
+  }, [isUnread, chatId, markRead]);
 
   // auto-scroll on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streaming?.content, streaming?.images.length, streaming?.toolCalls.length]);
+  }, [messages.length, stream?.content, stream?.images.length, stream?.toolCalls.length]);
 
-  async function handleSend(content: string, attachmentIds: number[]) {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    // show user message immediately before the network round-trip
+  function handleSend(content: string, attachmentIds: number[]) {
+    // optimistic user message
     qc.setQueryData(["messages", chatId], (old: Message[] | undefined) => [
       ...(old ?? []),
       {
@@ -155,72 +153,7 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
         created_at: new Date().toISOString(),
       },
     ]);
-
-    setSending(true);
-    setStreamError(null);
-    setStreaming({ content: "", images: [], thinking: "", toolCalls: [] });
-
-    try {
-      for await (const event of streamMessage(chatId, content, attachmentIds, controller.signal)) {
-        switch (event.type) {
-          case "text_delta":
-            setStreaming((s) => s ? { ...s, content: s.content + event.content } : s);
-            break;
-          case "thinking_delta":
-            setStreaming((s) => s ? { ...s, thinking: s.thinking + event.content } : s);
-            break;
-          case "image_generated":
-            setStreaming((s) =>
-              s ? { ...s, images: [...s.images, { url: event.url, prompt: event.prompt }] } : s,
-            );
-            break;
-          case "searching":
-            setStreaming((s) =>
-              s ? { ...s, toolCalls: [...s.toolCalls, { name: "web_search", done: false }] } : s,
-            );
-            break;
-          case "tool_start":
-            setStreaming((s) =>
-              s ? { ...s, toolCalls: [...s.toolCalls, { name: event.name, done: false }] } : s,
-            );
-            break;
-          case "tool_result":
-            setStreaming((s) => {
-              if (!s) return s;
-              const calls = [...s.toolCalls];
-              for (let i = calls.length - 1; i >= 0; i--) {
-                if (calls[i].name === event.name && !calls[i].done) {
-                  calls[i] = { ...calls[i], done: true, error: event.error };
-                  break;
-                }
-              }
-              return { ...s, toolCalls: calls };
-            });
-            break;
-          case "chat_title":
-            qc.invalidateQueries({ queryKey: ["chats"] });
-            qc.invalidateQueries({ queryKey: ["chat", chatId] });
-            break;
-          case "done":
-            qc.invalidateQueries({ queryKey: ["messages", chatId] });
-            setStreaming(null);
-            break;
-          case "error":
-            setStreamError(event.message);
-            setStreaming(null);
-            break;
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        // navigated away — clean exit
-      } else {
-        setStreamError("Something went wrong. Please try again.");
-      }
-      setStreaming(null);
-    } finally {
-      setSending(false);
-    }
+    startStream(chatId, content, attachmentIds);
   }
 
   const meta = chatMeta.data;
@@ -255,13 +188,12 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
               <span>Search on</span>
             </div>
           )}
-
         </div>
       </header>
 
       {/* messages */}
       <div className="flex-1 overflow-y-auto py-8 px-4">
-        {messages.length === 0 && !streaming && !streamError ? (
+        {messages.length === 0 && !stream && !streamError ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted text-sm">Send a message to begin</p>
           </div>
@@ -271,12 +203,12 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {streaming && (
+            {stream?.status === "streaming" && (
               <StreamingBubble
-                content={streaming.content}
-                images={streaming.images}
-                thinking={streaming.thinking || undefined}
-                toolCalls={streaming.toolCalls.length > 0 ? streaming.toolCalls : undefined}
+                content={stream.content}
+                images={stream.images}
+                thinking={stream.thinking || undefined}
+                toolCalls={stream.toolCalls.length > 0 ? stream.toolCalls : undefined}
               />
             )}
 
@@ -286,7 +218,7 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
                 <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2 flex-1">
                   <AlertCircleIcon size={14} className="flex-shrink-0" />
                   <span className="flex-1">{streamError}</span>
-                  <button onClick={() => setStreamError(null)} className="text-muted hover:text-primary">
+                  <button onClick={() => cancelStream(chatId)} className="text-muted hover:text-primary">
                     <XIcon size={12} />
                   </button>
                 </div>

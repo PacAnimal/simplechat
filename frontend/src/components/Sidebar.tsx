@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon, SearchIcon, XIcon } from "lucide-react";
 import { api } from "../lib/api";
+import { useStream } from "../lib/StreamContext";
 import type { Chat, MessageSearchResult, Profile } from "../types";
 import { PROVIDER_LABELS } from "../types";
 import { cn } from "../lib/utils";
@@ -28,6 +29,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated }: Props) {
   const qc = useQueryClient();
+  const { activeStreams, unreadChats } = useStream();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -194,7 +196,15 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
                 )}
                 data-testid={`chat-item-${chat.id}`}
               >
-                <MessageSquareIcon size={14} className="flex-shrink-0 opacity-50" />
+                <div className="relative flex-shrink-0">
+                  <MessageSquareIcon size={14} className="opacity-50" />
+                  {activeStreams.has(chat.id) && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent animate-pulse" />
+                  )}
+                  {!activeStreams.has(chat.id) && unreadChats.has(chat.id) && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[0.8125rem] truncate leading-snug font-medium">
                     {chat.title}

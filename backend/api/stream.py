@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import time
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,16 +24,14 @@ logger = logging.getLogger(__name__)
 
 _TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/csv", "application/json"}
 
-# per-profile rate limiting: one active stream + 1s holdoff between messages
-_profile_locks: dict[int, asyncio.Lock] = {}
-_profile_last_done: dict[int, float] = {}
-_HOLDOFF_SECS = 1.0
+# per-chat lock: prevent double-sending to the same chat
+_chat_locks: dict[int, asyncio.Lock] = {}
 
 
-def _get_profile_lock(pid: int) -> asyncio.Lock:
-    if pid not in _profile_locks:
-        _profile_locks[pid] = asyncio.Lock()
-    return _profile_locks[pid]
+def _get_chat_lock(chat_id: int) -> asyncio.Lock:
+    if chat_id not in _chat_locks:
+        _chat_locks[chat_id] = asyncio.Lock()
+    return _chat_locks[chat_id]
 
 
 async def _attachment_text(att: Attachment) -> str:
@@ -194,7 +191,7 @@ async def _event_stream(
     db: AsyncSession,
     request: Request,
     lock: asyncio.Lock,
-    profile_id: int,
+    chat_id: int,
 ):
     lock_released = False
 
@@ -202,7 +199,6 @@ async def _event_stream(
         nonlocal lock_released
         if not lock_released:
             lock_released = True
-            _profile_last_done[profile_id] = time.monotonic()
             lock.release()
 
     try:
@@ -274,17 +270,12 @@ async def send_message(
     if not settings.stub_providers:
         _check_provider_configured(chat.provider)
 
-    lock = _get_profile_lock(profile.id)
+    lock = _get_chat_lock(chat_id)
     if lock.locked():
         raise HTTPException(
-            429, "A message is already being processed for this profile"
+            429, "A message is already being processed for this chat"
         )
     await lock.acquire()
-
-    last_done = _profile_last_done.get(profile.id, 0.0)
-    holdoff = _HOLDOFF_SECS - (time.monotonic() - last_done)
-    if holdoff > 0:
-        await asyncio.sleep(holdoff)
 
     log_event(profile.name, "send_message", chat_id=chat_id)
     if settings.audit_log:
@@ -292,7 +283,7 @@ async def send_message(
 
     return StreamingResponse(
         _event_stream(
-            chat, body.content, body.attachment_ids, db, request, lock, profile.id
+            chat, body.content, body.attachment_ids, db, request, lock, chat_id
         ),
         media_type="text/event-stream",
         headers={

@@ -4,6 +4,7 @@ import ChatWindow from "./components/ChatWindow";
 import NewChatDialog from "./components/NewChatDialog";
 import ProfilePicker from "./components/ProfilePicker";
 import { clearToken, getStoredProfile } from "./lib/api";
+import { StreamProvider } from "./lib/StreamContext";
 import type { Chat, Profile } from "./types";
 
 export default function App() {
@@ -53,35 +54,37 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full bg-canvas text-primary">
-      <Sidebar
-        profile={profile}
-        selectedChatId={selectedChatId}
-        onSelectChat={setSelectedChatId}
-        onNewChat={() => handleNewChat()}
-        onLogout={handleLogout}
-        onProfileUpdated={handleProfileUpdated}
-      />
-
-      <main className="flex-1 flex flex-col min-w-0 bg-canvas">
-        {selectedChatId ? (
-          <ChatWindow
-            key={selectedChatId}
-            chatId={selectedChatId}
-            initialMessage={pendingMessage}
-          />
-        ) : (
-          <Welcome onNewChat={handleNewChat} />
-        )}
-      </main>
-
-      {newChatOpen && (
-        <NewChatDialog
-          onCreated={handleChatCreated}
-          onClose={() => setNewChatOpen(false)}
+    <StreamProvider>
+      <div className="flex h-full bg-canvas text-primary">
+        <Sidebar
+          profile={profile}
+          selectedChatId={selectedChatId}
+          onSelectChat={setSelectedChatId}
+          onNewChat={() => handleNewChat()}
+          onLogout={handleLogout}
+          onProfileUpdated={handleProfileUpdated}
         />
-      )}
-    </div>
+
+        <main className="flex-1 flex flex-col min-w-0 bg-canvas">
+          {selectedChatId ? (
+            <ChatWindow
+              key={selectedChatId}
+              chatId={selectedChatId}
+              initialMessage={pendingMessage}
+            />
+          ) : (
+            <Welcome onNewChat={handleNewChat} />
+          )}
+        </main>
+
+        {newChatOpen && (
+          <NewChatDialog
+            onCreated={handleChatCreated}
+            onClose={() => setNewChatOpen(false)}
+          />
+        )}
+      </div>
+    </StreamProvider>
   );
 }
 

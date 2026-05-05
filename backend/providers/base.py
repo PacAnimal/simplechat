@@ -72,7 +72,12 @@ GENERATE_IMAGE_TOOL = {
             "size": {
                 "type": "string",
                 "enum": ["1024x1024", "1536x1024", "1024x1536"],
-                "description": "Image dimensions. Default 1024x1024.",
+                "description": (
+                    "Image dimensions. Choose based on the subject: "
+                    "1024x1024 for square (default, portraits, icons), "
+                    "1536x1024 for widescreen/landscape (scenes, wallpapers, wide compositions), "
+                    "1024x1536 for vertical/portrait orientation (tall subjects, phone wallpapers, standing figures)."
+                ),
             },
             "image_path": {
                 "type": "string",
