@@ -7,9 +7,11 @@ import "highlight.js/styles/github-dark.css";
 import {
   XIcon, ChevronDownIcon, ChevronRightIcon,
   CheckIcon, LoaderIcon, GlobeIcon, ImageIcon, CopyIcon, AlertCircleIcon,
+  PaperclipIcon, DownloadIcon,
 } from "lucide-react";
-import type { Message, InlineImage, ToolCallRecord } from "../types";
+import type { Message, InlineImage, ToolCallRecord, Attachment } from "../types";
 import { getToken } from "../lib/api";
+import { formatBytes } from "../lib/utils";
 import SvgCanvas from "./SvgCanvas";
 
 interface Props {
@@ -36,7 +38,8 @@ function useAuthedBlobUrl(url: string): string {
   const [blobUrl, setBlobUrl] = useState("");
   useEffect(() => {
     const token = getToken();
-    if (!url.startsWith("/api/generated/") || !token) {
+    const needsAuth = url.startsWith("/api/generated/") || url.startsWith("/api/files/");
+    if (!needsAuth || !token) {
       setBlobUrl(url);
       return;
     }
@@ -53,6 +56,69 @@ function useAuthedBlobUrl(url: string): string {
     };
   }, [url]);
   return blobUrl;
+}
+
+async function downloadAttachment(att: Attachment) {
+  const token = getToken();
+  const url = `/api/files/${att.id}/download`;
+  const resp = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!resp.ok) return;
+  const blob = await resp.blob();
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = att.filename;
+  a.click();
+  URL.revokeObjectURL(objUrl);
+}
+
+function AttachedImageThumb({ att, onClick }: { att: Attachment; onClick: () => void }) {
+  const src = useAuthedBlobUrl(`/api/files/${att.id}/download`);
+  return (
+    <div className="relative group/img inline-block">
+      <img
+        src={src}
+        alt={att.filename}
+        className="h-16 w-16 object-cover rounded-lg border border-border cursor-pointer hover:opacity-90 transition-opacity"
+        onClick={onClick}
+      />
+    </div>
+  );
+}
+
+function AttachmentStrip({ attachments }: { attachments: Attachment[] }) {
+  const [lightbox, setLightbox] = useState<Attachment | null>(null);
+  if (!attachments.length) return null;
+
+  const images = attachments.filter((a) => a.mime_type.startsWith("image/"));
+  const files = attachments.filter((a) => !a.mime_type.startsWith("image/"));
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {images.map((att) => (
+        <AttachedImageThumb key={att.id} att={att} onClick={() => setLightbox(att)} />
+      ))}
+      {files.map((att) => (
+        <button
+          key={att.id}
+          onClick={() => downloadAttachment(att)}
+          className="flex items-center gap-1.5 bg-elevated border border-border rounded-lg px-3 py-1.5 text-xs text-secondary hover:text-primary hover:border-accent/50 transition-colors"
+          title={`Download ${att.filename}`}
+        >
+          <PaperclipIcon size={11} />
+          <span className="truncate max-w-36">{att.filename}</span>
+          <span className="text-muted">({formatBytes(att.size)})</span>
+          <DownloadIcon size={10} className="ml-0.5 text-muted" />
+        </button>
+      ))}
+      {lightbox && (
+        <Lightbox
+          img={{ url: `/api/files/${lightbox.id}/download`, prompt: lightbox.filename }}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </div>
+  );
 }
 
 function Lightbox({ img, onClose }: { img: InlineImage; onClose: () => void }) {
@@ -286,9 +352,12 @@ export default function MessageBubble({ message, images = message.images ?? [] }
         </p>
         {!isUser && message.thinking && <ThinkingPanel content={message.thinking} />}
         {isUser ? (
-          <p className="text-[0.9375rem] text-primary leading-[1.7] whitespace-pre-wrap">
-            {message.content}
-          </p>
+          <>
+            <p className="text-[0.9375rem] text-primary leading-[1.7] whitespace-pre-wrap">
+              {message.content}
+            </p>
+            <AttachmentStrip attachments={message.attachments ?? []} />
+          </>
         ) : (
           <AssistantContent content={message.content} />
         )}

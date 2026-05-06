@@ -10,6 +10,12 @@ from .base import ChatMessage, StreamEvent
 logger = logging.getLogger(__name__)
 
 
+def _flatten_content(content: str | list) -> str:
+    if isinstance(content, str):
+        return content
+    return " ".join(blk["text"] for blk in content if blk.get("type") == "text")
+
+
 def _partial_tag_suffix(text: str, tag: str) -> int:
     """Length of the longest suffix of text that is a prefix of tag."""
     for n in range(min(len(tag) - 1, len(text)), 0, -1):
@@ -38,15 +44,13 @@ class OllamaProvider:
         messages: list[ChatMessage],
         model: str,
     ) -> AsyncIterator[StreamEvent]:
+        flat: list = [{"role": m["role"], "content": _flatten_content(m["content"])} for m in messages]
         if settings.ollama_system_prompt:
-            messages = [
-                {"role": "system", "content": settings.ollama_system_prompt},
-                *messages,
-            ]
+            flat = [{"role": "system", "content": settings.ollama_system_prompt}, *flat]
 
         stream = await self.client.chat.completions.create(
             model=model,
-            messages=messages,  # type: ignore
+            messages=flat,  # type: ignore
             stream=True,
         )
 

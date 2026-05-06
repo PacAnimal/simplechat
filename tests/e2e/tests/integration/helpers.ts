@@ -75,3 +75,13 @@ export async function uploadFile(
 export async function uploadTextFile(page: Page, filename: string, content: string) {
   await uploadFile(page, filename, content, "text/plain");
 }
+
+export async function uploadFileFromPath(page: Page, filepath: string, mimeType: string) {
+  const fs = await import("fs");
+  const path = await import("path");
+  const buffer = fs.readFileSync(filepath);
+  const filename = path.basename(filepath);
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({ name: filename, mimeType, buffer });
+  await page.locator('[data-testid="attachment-chip"]').waitFor({ state: "visible", timeout: 15_000 });
+}

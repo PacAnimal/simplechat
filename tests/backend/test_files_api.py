@@ -3,6 +3,68 @@ from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
+# ---------------------------------------------------------------------------
+# Auth enforcement — every file/message endpoint must reject unauthenticated
+# requests with 401, not a redirect, not 403, not 404.
+# ---------------------------------------------------------------------------
+
+
+async def test_upload_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.post(
+        "/api/chats/1/files",
+        files={"file": ("x.txt", b"hello", "text/plain")},
+    )
+    assert r.status_code == 401
+
+
+async def test_list_files_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.get("/api/chats/1/files")
+    assert r.status_code == 401
+
+
+async def test_download_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.get("/api/files/1/download")
+    assert r.status_code == 401
+
+
+async def test_send_message_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.post(
+        "/api/chats/1/messages",
+        json={"content": "hi", "attachment_ids": []},
+    )
+    assert r.status_code == 401
+
+
+async def test_list_chats_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.get("/api/chats")
+    assert r.status_code == 401
+
+
+async def test_create_chat_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
+    assert r.status_code == 401
+
+
+async def test_list_messages_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.get("/api/chats/1/messages")
+    assert r.status_code == 401
+
+
+async def test_delete_chat_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.delete("/api/chats/1")
+    assert r.status_code == 401
+
+
+async def test_bogus_token_rejected_on_upload(unauthed_client: AsyncClient):
+    r = await unauthed_client.post(
+        "/api/chats/1/files",
+        files={"file": ("x.txt", b"hello", "text/plain")},
+        headers={"Authorization": "Bearer not-a-real-token"},
+    )
+    assert r.status_code == 401
+
 
 async def _create_chat(client: AsyncClient) -> int:
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
@@ -39,22 +101,24 @@ async def test_upload_csv_file_accepted(client: AsyncClient):
     assert r.status_code == 200
 
 
-async def test_upload_image_rejected(client: AsyncClient):
+async def test_upload_image_accepted(client: AsyncClient):
     chat_id = await _create_chat(client)
     r = await client.post(
         f"/api/chats/{chat_id}/files",
         files={"file": ("photo.png", b"\x89PNG\r\n\x1a\n", "image/png")},
     )
-    assert r.status_code == 415
+    assert r.status_code == 200
+    assert r.json()["mime_type"] == "image/png"
 
 
-async def test_upload_pdf_rejected(client: AsyncClient):
+async def test_upload_pdf_accepted(client: AsyncClient):
     chat_id = await _create_chat(client)
     r = await client.post(
         f"/api/chats/{chat_id}/files",
         files={"file": ("doc.pdf", b"%PDF-1.4 binary content", "application/pdf")},
     )
-    assert r.status_code == 415
+    assert r.status_code == 200
+    assert r.json()["mime_type"] == "application/pdf"
 
 
 async def test_upload_binary_disguised_as_text_rejected(client: AsyncClient):

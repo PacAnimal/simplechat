@@ -18,6 +18,22 @@ from .base import execute_tool as _execute_tool
 
 logger = logging.getLogger(__name__)
 
+
+def _to_anthropic_content(content: str | list) -> str | list:
+    if isinstance(content, str):
+        return content
+    result = []
+    for blk in content:
+        if blk.get("type") == "text":
+            result.append({"type": "text", "text": blk["text"]})
+        elif blk.get("type") == "image":
+            result.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": blk["media_type"], "data": blk["data"]},
+            })
+    return result
+
+
 _ANTHROPIC_IMAGE_TOOL = {
     "name": GENERATE_IMAGE_TOOL["name"],
     "description": GENERATE_IMAGE_TOOL["description"],
@@ -60,7 +76,10 @@ class AnthropicProvider:
         if web_search:
             tools.append(_WEB_SEARCH_TOOL)
 
-        current_messages = list(messages)
+        current_messages: list = [
+            {"role": m["role"], "content": _to_anthropic_content(m["content"])}
+            for m in messages
+        ]
         iteration = 0
 
         while True:

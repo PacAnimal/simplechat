@@ -59,6 +59,18 @@ class GeneratedImageEmbed(BaseModel):
         return data
 
 
+class AttachmentRead(BaseModel):
+    id: int
+    chat_id: int
+    message_id: int | None
+    filename: str
+    mime_type: str
+    size: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class MessageRead(BaseModel):
     id: int
     chat_id: int
@@ -69,6 +81,7 @@ class MessageRead(BaseModel):
     images: list[GeneratedImageEmbed] = Field(
         default=[], validation_alias="generated_images"
     )
+    attachments: list[AttachmentRead] = []
 
     model_config = {"from_attributes": True, "populate_by_name": True}
 
@@ -81,18 +94,6 @@ class MessageSearchResult(BaseModel):
     chat_model: str
     role: str
     content: str
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class AttachmentRead(BaseModel):
-    id: int
-    chat_id: int
-    message_id: int | None
-    filename: str
-    mime_type: str
-    size: int
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -202,7 +202,7 @@ async def list_messages(
     q = (
         select(Message)
         .where(Message.chat_id == chat_id)
-        .options(selectinload(Message.generated_images))
+        .options(selectinload(Message.generated_images), selectinload(Message.attachments))
         .order_by(Message.created_at)
         .offset(offset)
     )

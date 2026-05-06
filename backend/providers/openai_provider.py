@@ -21,6 +21,21 @@ from .base import execute_tool as _execute_tool
 logger = logging.getLogger(__name__)
 
 
+def _to_openai_content(content: str | list) -> str | list:
+    if isinstance(content, str):
+        return content
+    result = []
+    for blk in content:
+        if blk.get("type") == "text":
+            result.append({"type": "text", "text": blk["text"]})
+        elif blk.get("type") == "image":
+            result.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{blk['media_type']};base64,{blk['data']}"},
+            })
+    return result
+
+
 async def _web_search(query: str) -> str:
     try:
         from duckduckgo_search import DDGS
@@ -68,7 +83,10 @@ class OpenAIProvider:
         if web_search:
             tools.append({"type": "function", "function": WEB_SEARCH_TOOL_OPENAI})
 
-        current_messages = list(messages)
+        current_messages: list = [
+            {"role": m["role"], "content": _to_openai_content(m["content"])}
+            for m in messages
+        ]
         iteration = 0
 
         while True:

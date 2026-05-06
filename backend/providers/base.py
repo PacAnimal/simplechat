@@ -21,7 +21,7 @@ async def execute_tool(name: str, args: dict) -> dict:
 
 class ChatMessage(TypedDict):
     role: str
-    content: str
+    content: str | list  # list when message has image attachments
 
 
 class StreamEvent(TypedDict, total=False):

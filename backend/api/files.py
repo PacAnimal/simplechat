@@ -22,12 +22,62 @@ ALLOWED_MIME_TYPES = {
     "text/markdown",
     "text/csv",
     "application/json",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"}
+_BINARY_MIME_TYPES = ALLOWED_MIME_TYPES - {"text/plain", "text/markdown", "text/csv", "application/json"}
+
+# fallback when browser sends application/octet-stream
+_EXT_TO_MIME: dict[str, str] = {
+    ".pdf": "application/pdf",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
 }
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
+_MAGIC_BYTES: dict[str, list[bytes]] = {
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
+    "image/jpeg": [b"\xff\xd8\xff"],
+    "image/gif": [b"GIF87a", b"GIF89a"],
+    "image/webp": [b"RIFF"],  # RIFF????WEBP — check WEBP tag at offset 8
+    "image/bmp": [b"BM"],
+    "application/pdf": [b"%PDF-"],
+}
+
+
 def _validate_content(content: bytes, mime_type: str) -> None:
     """Reject files whose content doesn't match their claimed type."""
+    if mime_type in _MAGIC_BYTES:
+        magic_list = _MAGIC_BYTES[mime_type]
+        if not any(content.startswith(m) for m in magic_list):
+            raise HTTPException(415, f"File content does not match claimed type {mime_type}")
+        if mime_type == "image/webp" and len(content) >= 12 and content[8:12] != b"WEBP":
+            raise HTTPException(415, "File content does not match claimed type image/webp")
+        return
+
+    if mime_type in _BINARY_MIME_TYPES:
+        return  # office docs — no magic byte standard, skip
+
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
@@ -57,9 +107,13 @@ async def upload_file(
 
     mime = file.content_type or "application/octet-stream"
     if mime not in ALLOWED_MIME_TYPES:
+        # browser sometimes sends application/octet-stream — try to recover from extension
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        mime = _EXT_TO_MIME.get(ext, mime)
+    if mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             415,
-            f"Unsupported file type: {mime}. Supported: text/plain, text/markdown, text/csv, application/json",
+            "Unsupported file type. Supported: text, csv, json, pdf, images (png/jpeg/gif/webp), Excel (xls/xlsx), Word (docx), PowerPoint (pptx)",
         )
 
     _validate_content(content, mime)
@@ -70,9 +124,10 @@ async def upload_file(
     async with aiofiles.open(dest, "wb") as f:
         await f.write(content)
 
+    safe_filename = os.path.basename((file.filename or filename).replace("\r", "").replace("\n", ""))
     att = Attachment(
         chat_id=chat_id,
-        filename=file.filename or filename,
+        filename=safe_filename or filename,
         mime_type=mime,
         path=dest,
         size=len(content),
@@ -108,6 +163,8 @@ async def download_file(
     if not att:
         raise HTTPException(404, "File not found")
     await get_owned_chat(att.chat_id, profile.id, db)
-    if not os.path.exists(att.path):
+    full_path = os.path.realpath(att.path)
+    uploads_dir = os.path.realpath(settings.uploads_dir)
+    if not full_path.startswith(uploads_dir + os.sep) or not os.path.exists(full_path):
         raise HTTPException(404, "File missing from disk")
-    return FileResponse(att.path, filename=att.filename, media_type=att.mime_type)
+    return FileResponse(full_path, filename=att.filename, media_type=att.mime_type)

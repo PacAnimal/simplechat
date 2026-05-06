@@ -32,8 +32,13 @@ async def reset_db(
     await db.execute(delete(Profile))
     await db.commit()
 
+    uploads_real = os.path.realpath(settings.uploads_dir)
+    generated_real = os.path.realpath(settings.generated_dir)
     for path in att_paths + img_paths:
+        real = os.path.realpath(path)
+        if not (real.startswith(uploads_real + os.sep) or real.startswith(generated_real + os.sep)):
+            continue
         try:
-            os.remove(path)
+            os.remove(real)
         except OSError:
             pass

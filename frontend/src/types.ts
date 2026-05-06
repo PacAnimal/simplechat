@@ -28,6 +28,7 @@ export interface Message {
   content: string;
   thinking: string | null;
   images: InlineImage[];
+  attachments: Attachment[];
   created_at: string;
 }
 

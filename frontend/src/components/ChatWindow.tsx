@@ -263,6 +263,7 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
         onToggleWebSearch={() => toggleWebSearch.mutate()}
         disabled={sending}
         initialValue={initialMessage}
+        provider={meta?.provider}
       />
     </div>
   );

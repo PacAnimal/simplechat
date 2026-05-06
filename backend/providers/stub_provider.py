@@ -42,8 +42,13 @@ class StubProvider:
         return self._gen(messages, model, web_search)
 
     async def _gen(self, messages, model, web_search) -> AsyncIterator[StreamEvent]:
+        def _text(c: str | list) -> str:
+            if isinstance(c, str):
+                return c
+            return next((b["text"] for b in c if b.get("type") == "text"), "")
+
         last_user = next(
-            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+            (_text(m["content"]) for m in reversed(messages) if m["role"] == "user"), ""
         )
         is_image_request = any(
             kw in last_user.lower()

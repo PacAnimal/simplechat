@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 
@@ -23,6 +24,14 @@ from .deps import get_owned_chat
 logger = logging.getLogger(__name__)
 
 _TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/csv", "application/json"}
+_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+_DOC_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
 
 # per-chat lock: prevent double-sending to the same chat
 _chat_locks: dict[int, asyncio.Lock] = {}
@@ -35,6 +44,15 @@ def _get_chat_lock(chat_id: int) -> asyncio.Lock:
 
 
 async def _attachment_text(att: Attachment) -> str:
+    if att.mime_type in _DOC_MIME_TYPES:
+        try:
+            body = await asyncio.to_thread(_doc_to_text, att.path, att.mime_type)
+            return f"\n\n[Attached document: {att.filename}]\n```\n{body}\n```"
+        except Exception:
+            logger.warning(
+                "Failed to extract document %s (%s)", att.filename, att.path, exc_info=True
+            )
+            return ""
     if att.mime_type not in _TEXT_MIME_TYPES:
         return ""
     try:
@@ -46,6 +64,87 @@ async def _attachment_text(att: Attachment) -> str:
             "Failed to read attachment %s (%s)", att.filename, att.path, exc_info=True
         )
         return ""
+
+
+def _doc_to_text(path: str, mime: str) -> str:
+    """Convert an office/PDF document to plain text for embedding in a message."""
+    if mime == "application/pdf":
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        parts = []
+        for i, page in enumerate(reader.pages, 1):
+            text = page.extract_text() or ""
+            if text.strip():
+                parts.append(f"[Page {i}]")
+                parts.append(text)
+        return "\n".join(parts)
+
+    if mime in ("application/vnd.ms-excel",):
+        import xlrd
+        wb = xlrd.open_workbook(path)
+        parts = []
+        for name in wb.sheet_names():
+            sheet = wb.sheet_by_name(name)
+            if sheet.nrows == 0:
+                continue
+            parts.append(f"[Sheet: {name}]")
+            for r in range(sheet.nrows):
+                parts.append("\t".join(str(sheet.cell_value(r, c)) for c in range(sheet.ncols)))
+        return "\n".join(parts)
+
+    if mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        parts = []
+        for name in wb.sheetnames:
+            ws = wb[name]
+            rows = list(ws.values)
+            if not rows:
+                continue
+            parts.append(f"[Sheet: {name}]")
+            for row in rows:
+                parts.append("\t".join("" if v is None else str(v) for v in row))
+        wb.close()
+        return "\n".join(parts)
+
+    if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        import docx as _docx
+        doc = _docx.Document(path)
+        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                parts.append("\t".join(cell.text for cell in row.cells))
+        return "\n".join(parts)
+
+    if mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+        from pptx import Presentation
+        prs = Presentation(path)
+        parts = []
+        for i, slide in enumerate(prs.slides, 1):
+            parts.append(f"[Slide {i}]")
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for para in shape.text_frame.paragraphs:
+                        text = para.text.strip()
+                        if text:
+                            parts.append(text)
+        return "\n".join(parts)
+
+    return ""
+
+
+async def _attachment_image_block(att: Attachment) -> dict | None:
+    if att.mime_type not in _IMAGE_MIME_TYPES:
+        return None
+    try:
+        async with aiofiles.open(att.path, "rb") as f:
+            data = await f.read()
+        return {"type": "image", "media_type": att.mime_type, "data": base64.b64encode(data).decode()}
+    except Exception:
+        logger.warning(
+            "Failed to read image attachment %s (%s)", att.filename, att.path, exc_info=True
+        )
+        return None
 
 
 router = APIRouter(prefix="/chats", tags=["stream"])
@@ -95,9 +194,14 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
     out = []
     for m in rows:
         if m.role == "user":
-            content = m.content
+            text = m.content
             for att in m.attachments:
-                content += await _attachment_text(att)
+                text += await _attachment_text(att)
+            image_blocks = [b for att in m.attachments if (b := await _attachment_image_block(att)) is not None]
+            if image_blocks:
+                content: str | list = [{"type": "text", "text": text}, *image_blocks]
+            else:
+                content = text
             out.append({"role": "user", "content": content})
         elif m.role == "assistant":
             content = m.content
