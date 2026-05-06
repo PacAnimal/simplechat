@@ -217,7 +217,7 @@ export default function MessageInput({
           </div>
         </div>
 
-        <p className="text-center text-[0.7rem] text-muted mt-2">
+        <p className="hidden wide:block text-center text-[0.7rem] text-muted mt-2">
           Enter to send · Shift+Enter or Ctrl+Enter for newline
         </p>
       </div>

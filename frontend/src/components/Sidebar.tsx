@@ -16,6 +16,8 @@ interface Props {
   onNewChat: () => void;
   onLogout: () => void;
   onProfileUpdated: (profile: Profile) => void;
+  open: boolean;
+  onClose: () => void;
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -27,7 +29,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated }: Props) {
+export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated, open }: Props) {
   const qc = useQueryClient();
   const { activeStreams, unreadChats } = useStream();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -89,7 +91,16 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
 
   return (
     <aside
-      className="w-64 flex-shrink-0 flex flex-col bg-sidebar h-full"
+      className={cn(
+        "flex-shrink-0 flex flex-col bg-sidebar h-full w-64",
+        "transition-transform duration-200 ease-in-out",
+        // mobile: fixed drawer
+        "fixed inset-y-0 left-0 z-40",
+        // wide viewport: normal in-flow
+        "wide:relative wide:z-auto wide:translate-x-0",
+        // mobile toggle
+        open ? "translate-x-0" : "-translate-x-full",
+      )}
       data-testid="sidebar"
     >
       {/* logo + action buttons */}

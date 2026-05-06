@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon } from "lucide-react";
+import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon, Menu } from "lucide-react";
 import { api } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
 import type { Chat, Message } from "../types";
@@ -11,6 +11,7 @@ import MessageInput from "./MessageInput";
 interface Props {
   chatId: number;
   initialMessage?: string;
+  onOpenSidebar?: () => void;
 }
 
 function ModelSwitcher({ chatId, provider, model, disabled }: {
@@ -95,7 +96,7 @@ function ModelSwitcher({ chatId, provider, model, disabled }: {
   );
 }
 
-export default function ChatWindow({ chatId, initialMessage }: Props) {
+export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Props) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const { activeStreams, unreadChats, startStream, cancelStream, markRead } = useStream();
@@ -161,8 +162,15 @@ export default function ChatWindow({ chatId, initialMessage }: Props) {
   return (
     <div className="flex flex-col h-full bg-canvas" data-testid="chat-window">
       {/* slim header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-border/50 flex-shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border/50 flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={onOpenSidebar}
+            className="wide:hidden flex-shrink-0 p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
+            aria-label="Open sidebar"
+          >
+            <Menu size={18} />
+          </button>
           <div className="min-w-0">
             <h2
               className="text-sm font-semibold text-primary truncate"

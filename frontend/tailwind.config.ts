@@ -5,6 +5,10 @@ export default {
   darkMode: "class",
   theme: {
     extend: {
+      screens: {
+        // sidebar visible when it takes ≤30% of viewport (256px / 0.30 ≈ 853px)
+        wide: "860px",
+      },
       colors: {
         // primary surfaces
         canvas: "#212121",        // main chat area

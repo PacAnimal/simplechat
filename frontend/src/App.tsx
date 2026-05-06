@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Menu } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
 import NewChatDialog from "./components/NewChatDialog";
@@ -12,6 +13,7 @@ export default function App() {
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | undefined>(undefined);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // listen for 401 events from api.ts
   useEffect(() => {
@@ -34,6 +36,11 @@ export default function App() {
     setSelectedChatId(null);
   }
 
+  function handleSelectChat(id: number | null) {
+    setSelectedChatId(id);
+    setSidebarOpen(false);
+  }
+
   function handleProfileUpdated(p: Profile) {
     setProfile(p);
   }
@@ -51,18 +58,29 @@ export default function App() {
     setSelectedChatId(chat.id);
     setNewChatOpen(false);
     setPendingMessage(undefined);
+    setSidebarOpen(false);
   }
 
   return (
     <StreamProvider>
       <div className="flex h-full bg-canvas text-primary">
+        {/* mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-30 wide:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         <Sidebar
           profile={profile}
           selectedChatId={selectedChatId}
-          onSelectChat={setSelectedChatId}
-          onNewChat={() => handleNewChat()}
+          onSelectChat={handleSelectChat}
+          onNewChat={() => { handleNewChat(); setSidebarOpen(false); }}
           onLogout={handleLogout}
           onProfileUpdated={handleProfileUpdated}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
 
         <main className="flex-1 flex flex-col min-w-0 bg-canvas">
@@ -71,9 +89,10 @@ export default function App() {
               key={selectedChatId}
               chatId={selectedChatId}
               initialMessage={pendingMessage}
+              onOpenSidebar={() => setSidebarOpen(true)}
             />
           ) : (
-            <Welcome onNewChat={handleNewChat} />
+            <Welcome onNewChat={handleNewChat} onOpenSidebar={() => setSidebarOpen(true)} />
           )}
         </main>
 
@@ -95,9 +114,16 @@ const SUGGESTIONS = [
   { icon: "💡", label: "Explain a concept", prompt: "Explain quantum entanglement in simple terms." },
 ];
 
-function Welcome({ onNewChat }: { onNewChat: (initialMessage?: string) => void }) {
+function Welcome({ onNewChat, onOpenSidebar }: { onNewChat: (initialMessage?: string) => void; onOpenSidebar: () => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 select-none">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 select-none relative">
+      <button
+        onClick={onOpenSidebar}
+        className="absolute top-4 left-4 wide:hidden p-2 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
+        aria-label="Open sidebar"
+      >
+        <Menu size={20} />
+      </button>
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-primary mb-3 tracking-tight">SimpleChat</h1>
         <p className="text-secondary text-base">Yet another AI chat web interface.</p>
