@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import sse_events
+from .. import model_registry, sse_events
 from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
 from ..event_logging import audit_message, log_event
 from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
-from ..providers import AnthropicProvider, OpenAIProvider
+from ..providers import AnthropicProvider, OllamaProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
 from ..schemas import SendMessageRequest
 from .deps import get_owned_chat
@@ -42,15 +42,21 @@ async def _attachment_text(att: Attachment) -> str:
             body = await f.read()
         return f"\n\n[Attached file: {att.filename}]\n```\n{body}\n```"
     except Exception:
-        logger.warning("Failed to read attachment %s (%s)", att.filename, att.path, exc_info=True)
+        logger.warning(
+            "Failed to read attachment %s (%s)", att.filename, att.path, exc_info=True
+        )
         return ""
 
 
 router = APIRouter(prefix="/chats", tags=["stream"])
 
 
-_PROVIDER_KEYS = {"openai": "openai_api_key", "anthropic": "anthropic_api_key"}
-_PROVIDER_LABELS = {"openai": "OpenAI", "anthropic": "Anthropic"}
+_PROVIDER_KEYS = {
+    "openai": "openai_api_key",
+    "anthropic": "anthropic_api_key",
+    "ollama": "ollama_api_url",
+}
+_PROVIDER_LABELS = {"openai": "OpenAI", "anthropic": "Anthropic", "ollama": "Ollama"}
 
 
 def _check_provider_configured(provider: str) -> None:
@@ -58,7 +64,9 @@ def _check_provider_configured(provider: str) -> None:
     key_attr = _PROVIDER_KEYS.get(provider)
     if key_attr and not getattr(settings, key_attr, None):
         label = _PROVIDER_LABELS.get(provider, provider)
-        raise HTTPException(status_code=503, detail=f"{label} is not configured on this server")
+        raise HTTPException(
+            status_code=503, detail=f"{label} is not configured on this server"
+        )
 
 
 def _get_provider(chat: Chat):
@@ -68,6 +76,8 @@ def _get_provider(chat: Chat):
         return OpenAIProvider()
     if chat.provider == "anthropic":
         return AnthropicProvider()
+    if chat.provider == "ollama":
+        return OllamaProvider()
     raise HTTPException(status_code=400, detail=f"Unknown provider: {chat.provider}")
 
 
@@ -92,7 +102,9 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
         elif m.role == "assistant":
             content = m.content
             for img in m.generated_images:
-                content += f"\n\n[Generated image — path: {img.path} | prompt: {img.prompt}]"
+                content += (
+                    f"\n\n[Generated image — path: {img.path} | prompt: {img.prompt}]"
+                )
             out.append({"role": "assistant", "content": content})
     return out
 
@@ -147,7 +159,7 @@ async def _save_assistant_message(
 
 
 async def _generate_chat_title(
-    user_content: str, assistant_content: str, provider: str
+    user_content: str, assistant_content: str, provider: str, model: str
 ) -> str:
     """Use a lightweight LLM call to produce a short chat title (5 words max)."""
     if settings.stub_providers:
@@ -172,6 +184,20 @@ async def _generate_chat_title(
             client = AsyncOpenAI(api_key=settings.openai_api_key)
             resp = await client.chat.completions.create(
                 model="gpt-4o-mini",
+                max_tokens=20,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
+            )
+            return (resp.choices[0].message.content or "").strip()[:100]
+        if provider == "ollama" and settings.ollama_api_url:
+            from openai import AsyncOpenAI
+
+            base_url = settings.ollama_api_url.rstrip("/") + "/v1"
+            client = AsyncOpenAI(api_key="ollama", base_url=base_url)
+            resp = await client.chat.completions.create(
+                model=model,
                 max_tokens=20,
                 messages=[
                     {"role": "system", "content": system},
@@ -205,6 +231,7 @@ async def _event_stream(
         await _save_user_message(chat.id, user_content, attachment_ids, db)
         messages = await _build_messages(chat.id, db)
         provider = _get_provider(chat)
+        real_model = model_registry.resolve_model_id(chat.provider, chat.model)
 
         full_content = ""
         thinking_content = ""
@@ -216,7 +243,7 @@ async def _event_stream(
 
         disconnect_task = asyncio.create_task(_watch_disconnect())
         try:
-            stream = provider.stream_chat(messages, chat.model, chat.web_search_enabled)
+            stream = provider.stream_chat(messages, real_model, chat.web_search_enabled)
             async for event in stream:
                 if disconnect_task.done():
                     logger.info("Client disconnected mid-stream for chat %d", chat.id)
@@ -242,7 +269,7 @@ async def _event_stream(
 
         if chat.title_is_default:
             title = await _generate_chat_title(
-                user_content, full_content, chat.provider
+                user_content, full_content, chat.provider, real_model
             )
             chat.title = title
             chat.title_is_default = False
@@ -272,9 +299,7 @@ async def send_message(
 
     lock = _get_chat_lock(chat_id)
     if lock.locked():
-        raise HTTPException(
-            429, "A message is already being processed for this chat"
-        )
+        raise HTTPException(429, "A message is already being processed for this chat")
     await lock.acquire()
 
     log_event(profile.name, "send_message", chat_id=chat_id)

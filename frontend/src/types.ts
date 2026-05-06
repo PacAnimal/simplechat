@@ -9,7 +9,7 @@ export interface Profile {
 export interface Chat {
   id: number;
   title: string;
-  provider: "openai" | "anthropic";
+  provider: "openai" | "anthropic" | "ollama";
   model: string;
   web_search_enabled: boolean;
   created_at: string;
@@ -72,6 +72,7 @@ export interface ToolCallRecord {
 export const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
+  ollama: "Ollama",
 };
 
 export const MODELS: Record<string, { label: string; value: string }[]> = {

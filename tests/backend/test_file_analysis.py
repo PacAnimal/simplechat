@@ -402,7 +402,9 @@ async def test_large_xls_openai_full_content_in_context(client: AsyncClient):
 
     content = [m for m in captured if m["role"] == "user"][0]["content"]
     assert "Rasheeda" in content, "row 5000 first name missing from OpenAI context"
-    assert "Angel" in content and "Sanor" in content, "Angel Sanor missing from OpenAI context"
+    assert "Angel" in content and "Sanor" in content, (
+        "Angel Sanor missing from OpenAI context"
+    )
     assert "Male" in content, "Angel Sanor's gender missing from OpenAI context"
 
 
@@ -434,5 +436,7 @@ async def test_large_xls_anthropic_full_content_in_context(client: AsyncClient):
 
     content = [m for m in captured if m["role"] == "user"][0]["content"]
     assert "Rasheeda" in content, "row 5000 first name missing from Anthropic context"
-    assert "Angel" in content and "Sanor" in content, "Angel Sanor missing from Anthropic context"
+    assert "Angel" in content and "Sanor" in content, (
+        "Angel Sanor missing from Anthropic context"
+    )
     assert "Male" in content, "Angel Sanor's gender missing from Anthropic context"

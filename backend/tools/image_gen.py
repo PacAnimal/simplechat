@@ -8,7 +8,9 @@ from openai import AsyncOpenAI
 from ..config import settings
 
 
-async def generate_image(prompt: str, size: str = "1024x1024", image_path: str | None = None) -> dict:
+async def generate_image(
+    prompt: str, size: str = "1024x1024", image_path: str | None = None
+) -> dict:
     if not settings.openai_api_key:
         raise ValueError("OPENAI_API_KEY is not configured")
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -27,7 +29,10 @@ async def generate_image(prompt: str, size: str = "1024x1024", image_path: str |
         # validate path is within generated dir to prevent traversal
         real_path = os.path.realpath(image_path)
         real_gen_dir = os.path.realpath(settings.generated_dir)
-        if not real_path.startswith(real_gen_dir + os.sep) and real_path != real_gen_dir:
+        if (
+            not real_path.startswith(real_gen_dir + os.sep)
+            and real_path != real_gen_dir
+        ):
             raise ValueError("Invalid image_path: must be within generated directory")
 
         async with aiofiles.open(image_path, "rb") as f:
@@ -44,7 +49,12 @@ async def generate_image(prompt: str, size: str = "1024x1024", image_path: str |
             edit_kwargs["response_format"] = "b64_json"
         response = await client.images.edit(**edit_kwargs)  # type: ignore
     else:
-        gen_kwargs: dict = {"model": settings.image_model, "prompt": prompt, "size": size, "n": 1}
+        gen_kwargs: dict = {
+            "model": settings.image_model,
+            "prompt": prompt,
+            "size": size,
+            "n": 1,
+        }
         # dall-e-* models require response_format; gpt-image-* always returns b64
         if settings.image_model.startswith("dall-e"):
             gen_kwargs["response_format"] = "b64_json"

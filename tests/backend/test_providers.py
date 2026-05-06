@@ -339,6 +339,101 @@ async def test_openai_stream_max_iterations_guard():
     assert len(tool_starts) == MAX_TOOL_ITERATIONS
 
 
+# ---- Ollama provider ----
+
+
+def _make_ollama_chunk(content: str | None):
+    chunk = MagicMock()
+    chunk.choices = [MagicMock()]
+    chunk.choices[0].delta.content = content
+    return chunk
+
+
+async def _ollama_events(chunks: list, provider=None):
+    import backend.providers.ollama_provider as m
+
+    if provider is None:
+        original = m.settings.ollama_api_url
+        m.settings.ollama_api_url = "http://localhost:11434"
+        try:
+            provider = m.OllamaProvider()
+        finally:
+            m.settings.ollama_api_url = original
+
+    async def fake_create(**kwargs):
+        async def gen():
+            for c in chunks:
+                yield c
+
+        return gen()
+
+    with patch.object(provider.client.chat.completions, "create", new=fake_create):
+        events = []
+        async for event in provider._stream([{"role": "user", "content": "Hi"}], "llama3"):
+            events.append(event)
+    return events
+
+
+async def test_ollama_stream_plain_text():
+    events = await _ollama_events(
+        [_make_ollama_chunk("Hello "), _make_ollama_chunk("world")]
+    )
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    thinking = "".join(e["content"] for e in events if e["type"] == "thinking_delta")
+    assert text == "Hello world"
+    assert thinking == ""
+
+
+async def test_ollama_stream_think_block_single_chunk():
+    events = await _ollama_events(
+        [_make_ollama_chunk("<think>No violation.</think>Safe reply")]
+    )
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    thinking = "".join(e["content"] for e in events if e["type"] == "thinking_delta")
+    assert thinking == "No violation."
+    assert text == "Safe reply"
+
+
+async def test_ollama_stream_think_block_cross_chunk():
+    # tags split across chunk boundaries
+    events = await _ollama_events(
+        [
+            _make_ollama_chunk("<thi"),
+            _make_ollama_chunk("nk>No violation.</th"),
+            _make_ollama_chunk("ink>Reply"),
+        ]
+    )
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    thinking = "".join(e["content"] for e in events if e["type"] == "thinking_delta")
+    assert thinking == "No violation."
+    assert text == "Reply"
+
+
+async def test_ollama_stream_think_then_text():
+    events = await _ollama_events(
+        [
+            _make_ollama_chunk("<think>internal</think>"),
+            _make_ollama_chunk("visible"),
+        ]
+    )
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    thinking = "".join(e["content"] for e in events if e["type"] == "thinking_delta")
+    assert thinking == "internal"
+    assert text == "visible"
+
+
+async def test_ollama_stream_no_think_tags():
+    events = await _ollama_events([_make_ollama_chunk("just text")])
+    assert all(e["type"] == "text_delta" for e in events)
+
+
+async def test_ollama_stream_no_choices():
+    empty = MagicMock()
+    empty.choices = []
+    events = await _ollama_events([empty])
+    assert events == []
+
+
 async def test_anthropic_stream_max_iterations_guard():
     """Anthropic provider must also stop after MAX_TOOL_ITERATIONS."""
     from backend.providers.anthropic_provider import (

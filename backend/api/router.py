@@ -23,6 +23,7 @@ async def get_config(request: Request):
     return {
         "can_create_profile": _can_create(request),
         "password_min_length": settings.password_min_length,
+        "allow_switching_models": settings.allow_switching_models,
     }
 
 

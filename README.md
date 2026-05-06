@@ -76,8 +76,12 @@ The Dockerfile is a two-stage build: the first stage compiles the React frontend
 | `CREATE` | `local` | Who can create new profiles. `local` = localhost and RFC-1918 addresses only, `any` = anyone, `none` = nobody (existing profiles still work). |
 | `INCOMING_HTTP_PROXY` | `false` | Set to `true` to trust `X-Forwarded-For` / `X-Forwarded-Proto` headers from a local reverse proxy (nginx, Caddy, Traefik, etc.). |
 | `PASSWORD_MIN_LENGTH` | `8` | Minimum password length for new profiles. Set to `0` to disable password requirements entirely. |
-| `ALLOWED_MODELS` | *(all)* | Comma-separated allowlist of model IDs. Empty = all models are available. Example: `gpt-4o,claude-sonnet-4-6`. |
+| `OPENAI_MODELS` | *(all)* | Space-separated list of OpenAI model IDs to expose, in display order. Empty = all available. Optionally rename with `Label@model-id`. Example: `GPT-4o@gpt-4o gpt-4o-mini`. Real model IDs behind a label are not sent to clients. |
+| `ANTHROPIC_MODELS` | *(all)* | Same as `OPENAI_MODELS` but for Anthropic models. Example: `Sonnet@claude-sonnet-4-6`. |
+| `OLLAMA_MODELS` | *(all)* | Same as `OPENAI_MODELS` but for Ollama models. Example: `Fast@llama3.1:8b`. |
+| `OLLAMA_SYSTEM_PROMPT` | *(none)* | System prompt prepended to every Ollama request. Useful for overriding a model's built-in guard template. Example: `You are a helpful assistant. Answer directly without disclaimers.` |
 | `IMAGE_MODEL` | `gpt-image-2` | OpenAI model used for image generation. |
+| `ALLOW_SWITCHING_MODELS` | `true` | Set to `false` to hide the model switcher and prevent users from changing models on existing chats. |
 
 ---
 

@@ -88,9 +88,15 @@ async def create_chat(
     db: AsyncSession = Depends(get_db),
 ):
     key_attr = _PROVIDER_KEY_ATTRS.get(body.provider)
-    if key_attr and not getattr(settings, key_attr, None) and not settings.stub_providers:
+    if (
+        key_attr
+        and not getattr(settings, key_attr, None)
+        and not settings.stub_providers
+    ):
         label = _PROVIDER_LABELS.get(body.provider, body.provider)
-        raise HTTPException(status_code=503, detail=f"{label} is not configured on this server")
+        raise HTTPException(
+            status_code=503, detail=f"{label} is not configured on this server"
+        )
     model = body.model or PROVIDER_DEFAULTS.get(body.provider, "gpt-4o")
     chat = Chat(
         profile_id=profile.id,
@@ -135,8 +141,16 @@ async def update_chat(
     if body.web_search_enabled is not None:
         chat.web_search_enabled = body.web_search_enabled
     if body.model is not None:
+        if not settings.allow_switching_models:
+            raise HTTPException(
+                status_code=403, detail="Switching models is disabled on this server"
+            )
         chat.model = body.model
     if body.provider is not None:
+        if not settings.allow_switching_models:
+            raise HTTPException(
+                status_code=403, detail="Switching models is disabled on this server"
+            )
         chat.provider = body.provider
     await db.commit()
     await db.refresh(chat)

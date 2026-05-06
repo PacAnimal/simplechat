@@ -55,8 +55,19 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.json();
 }
 
+export type ModelsResponse = Record<string, { id: string; label: string }[]>;
+
+/** Look up the display label for a model ID; falls back to the raw ID. */
+export function modelLabel(
+  models: ModelsResponse | undefined,
+  provider: string,
+  modelId: string,
+): string {
+  return models?.[provider]?.find((m) => m.id === modelId)?.label ?? modelId;
+}
+
 export const api = {
-  getConfig: () => req<{ can_create_profile: boolean; password_min_length: number }>("GET", "/config"),
+  getConfig: () => req<{ can_create_profile: boolean; password_min_length: number; allow_switching_models: boolean }>("GET", "/config"),
   // profiles (no auth required)
   listProfiles: () => req<Profile[]>("GET", "/profiles"),
   createProfile: (name: string, password: string, avatar: number) =>
@@ -72,7 +83,7 @@ export const api = {
     req<void>("POST", `/profiles/${profileId}/change-password`, { current_password, new_password }),
 
   // models
-  getModels: () => req<Record<string, { id: string; label: string }[]>>("GET", "/models"),
+  getModels: () => req<ModelsResponse>("GET", "/models"),
 
   // chats
   listChats: () => req<Chat[]>("GET", "/chats"),

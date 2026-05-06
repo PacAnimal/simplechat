@@ -165,13 +165,12 @@ def test_startup_logs_available_models(uvicorn_proc):
     output = (stdout + stderr).decode(errors="replace")
 
     # uvicorn_proc sets both OPENAI_API_KEY and ANTHROPIC_API_KEY,
-    # so both providers are configured and must each produce one log line
+    # so both providers are configured; each must produce an "all" and an "available" line
     lines = output.splitlines()
-    openai_lines = [line for line in lines if "OpenAI models:" in line]
-    anthropic_lines = [line for line in lines if "Anthropic models:" in line]
-
-    assert len(openai_lines) == 1, f"expected 1 OpenAI log line, got:\n{output}"
-    assert len(anthropic_lines) == 1, f"expected 1 Anthropic log line, got:\n{output}"
+    assert any("OpenAI models:" in line for line in lines), f"missing OpenAI models line:\n{output}"
+    assert any("OpenAI available models:" in line for line in lines), f"missing OpenAI available models line:\n{output}"
+    assert any("Anthropic models:" in line for line in lines), f"missing Anthropic models line:\n{output}"
+    assert any("Anthropic available models:" in line for line in lines), f"missing Anthropic available models line:\n{output}"
 
 
 def test_startup_logs_unconfigured_provider():
@@ -193,8 +192,16 @@ def test_startup_logs_unconfigured_provider():
     env["OPENAI_API_KEY"] = ""  # empty shadows .env file; falsy → unconfigured
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "backend.main:app",
-         "--host", "127.0.0.1", "--port", str(port)],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "backend.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
@@ -208,9 +215,9 @@ def test_startup_logs_unconfigured_provider():
 
     output = (stdout + stderr).decode(errors="replace")
     lines = output.splitlines()
-    assert not any("OpenAI models:" in line for line in lines), (
+    assert not any("OpenAI" in line and "models:" in line for line in lines), (
         f"unconfigured OpenAI should not produce a log line:\n{output}"
     )
-    assert any("Anthropic models:" in line for line in lines), (
+    assert any("Anthropic" in line and "models:" in line for line in lines), (
         f"expected Anthropic model line in output:\n{output}"
     )

@@ -51,13 +51,13 @@ async def test_dalle_model_includes_response_format(tmp_path, monkeypatch):
     assert call_kwargs["model"] == "dall-e-3"
 
 
-async def test_image_gen_ignores_allowed_models(tmp_path, monkeypatch):
-    """IMAGE_MODEL must be used for generation even when ALLOWED_MODELS excludes it."""
+async def test_image_gen_ignores_model_spec(tmp_path, monkeypatch):
+    """IMAGE_MODEL must be used for generation even when OPENAI_MODELS excludes it."""
     import backend.config as cfg
     from backend.tools.image_gen import generate_image
 
-    # allowed_models excludes the image model entirely
-    monkeypatch.setattr(cfg.settings, "allowed_models", "gpt-4o,gpt-4o-mini")
+    # openai_models spec excludes the image model entirely — should have no effect
+    monkeypatch.setattr(cfg.settings, "openai_models", "gpt-4o gpt-4o-mini")
     monkeypatch.setattr(cfg.settings, "openai_api_key", "test-key")
     monkeypatch.setattr(cfg.settings, "image_model", "gpt-image-2")
     monkeypatch.setattr(cfg.settings, "generated_dir", str(tmp_path))

@@ -201,3 +201,78 @@ async def test_create_chat_without_title_defaults_to_new_chat(client: AsyncClien
     r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
     assert r.status_code == 201
     assert r.json()["title"] == "New Chat"
+
+
+async def test_switch_model_blocked_when_allow_switching_models_false(
+    client, monkeypatch
+):
+    import backend.api.chats as chats_mod
+    import backend.config as cfg
+
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
+    chat_id = create.json()["id"]
+
+    monkeypatch.setattr(cfg.settings, "allow_switching_models", False)
+    monkeypatch.setattr(chats_mod.settings, "allow_switching_models", False)
+
+    r = await client.patch(
+        f"/api/chats/{chat_id}",
+        json={"model": "claude-sonnet-4-6", "provider": "anthropic"},
+    )
+    assert r.status_code == 403
+    assert "disabled" in r.json()["detail"].lower()
+
+
+async def test_switch_model_allowed_when_allow_switching_models_true(
+    client, monkeypatch
+):
+    import backend.api.chats as chats_mod
+    import backend.config as cfg
+
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
+    chat_id = create.json()["id"]
+
+    monkeypatch.setattr(cfg.settings, "allow_switching_models", True)
+    monkeypatch.setattr(chats_mod.settings, "allow_switching_models", True)
+
+    r = await client.patch(
+        f"/api/chats/{chat_id}",
+        json={"model": "claude-sonnet-4-6", "provider": "anthropic"},
+    )
+    assert r.status_code == 200
+
+
+async def test_config_endpoint_includes_allow_switching_models(client, monkeypatch):
+    import backend.api.router as router_mod
+    import backend.config as cfg
+
+    monkeypatch.setattr(cfg.settings, "allow_switching_models", False)
+    monkeypatch.setattr(router_mod.settings, "allow_switching_models", False)
+
+    r = await client.get("/api/config")
+    assert r.status_code == 200
+    assert r.json()["allow_switching_models"] is False
+
+
+async def test_title_rename_still_works_when_allow_switching_models_false(
+    client, monkeypatch
+):
+    """Disabling model switching must not block title renames."""
+    import backend.api.chats as chats_mod
+    import backend.config as cfg
+
+    create = await client.post(
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+    )
+    chat_id = create.json()["id"]
+
+    monkeypatch.setattr(cfg.settings, "allow_switching_models", False)
+    monkeypatch.setattr(chats_mod.settings, "allow_switching_models", False)
+
+    r = await client.patch(f"/api/chats/{chat_id}", json={"title": "New name"})
+    assert r.status_code == 200
+    assert r.json()["title"] == "New name"

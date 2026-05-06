@@ -11,16 +11,24 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _register(c: AsyncClient, name: str, password: str) -> dict:
-    r = await c.post("/api/profiles", json={"name": name, "password": password, "avatar": 0})
+    r = await c.post(
+        "/api/profiles", json={"name": name, "password": password, "avatar": 0}
+    )
     return r
 
 
 async def _login(c: AsyncClient, profile_id: int, password: str) -> dict:
-    return await c.post(f"/api/profiles/{profile_id}/login", json={"password": password})
+    return await c.post(
+        f"/api/profiles/{profile_id}/login", json={"password": password}
+    )
 
 
-async def _register_and_token(c: AsyncClient, name: str, password: str) -> tuple[int, str]:
-    r = await c.post("/api/profiles", json={"name": name, "password": password, "avatar": 0})
+async def _register_and_token(
+    c: AsyncClient, name: str, password: str
+) -> tuple[int, str]:
+    r = await c.post(
+        "/api/profiles", json={"name": name, "password": password, "avatar": 0}
+    )
     assert r.status_code == 201, r.text
     pid = r.json()["id"]
     lr = await c.post(f"/api/profiles/{pid}/login", json={"password": password})
@@ -113,35 +121,49 @@ async def test_custom_min_length_enforced(unauthed_client: AsyncClient, monkeypa
     assert r.status_code == 422
 
 
-async def test_custom_min_length_met_accepted(unauthed_client: AsyncClient, monkeypatch):
+async def test_custom_min_length_met_accepted(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 12)
     r = await _register(unauthed_client, "Alice", "longEnough12")  # 12 chars
     assert r.status_code == 201
 
 
-async def test_custom_min_length_enforced_on_password_change(unauthed_client: AsyncClient, monkeypatch):
+async def test_custom_min_length_enforced_on_password_change(
+    unauthed_client: AsyncClient, monkeypatch
+):
     pid, token = await _register_and_token(unauthed_client, "Alice", "validPw1")
     monkeypatch.setattr(config_module.settings, "password_min_length", 12)
     r = await unauthed_client.post(
         f"/api/profiles/{pid}/change-password",
-        json={"current_password": "validPw1", "new_password": "short1A"},  # 7 chars — under 12
+        json={
+            "current_password": "validPw1",
+            "new_password": "short1A",
+        },  # 7 chars — under 12
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 422
 
 
-async def test_custom_min_length_password_change_met_accepted(unauthed_client: AsyncClient, monkeypatch):
+async def test_custom_min_length_password_change_met_accepted(
+    unauthed_client: AsyncClient, monkeypatch
+):
     pid, token = await _register_and_token(unauthed_client, "Alice", "validPw1")
     monkeypatch.setattr(config_module.settings, "password_min_length", 12)
     r = await unauthed_client.post(
         f"/api/profiles/{pid}/change-password",
-        json={"current_password": "validPw1", "new_password": "longEnough12"},  # 12 chars
+        json={
+            "current_password": "validPw1",
+            "new_password": "longEnough12",
+        },  # 12 chars
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 204
 
 
-async def test_config_endpoint_reflects_custom_min_length(unauthed_client: AsyncClient, monkeypatch):
+async def test_config_endpoint_reflects_custom_min_length(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 12)
     r = await unauthed_client.get("/api/config")
     assert r.status_code == 200
@@ -151,19 +173,27 @@ async def test_config_endpoint_reflects_custom_min_length(unauthed_client: Async
 # ─── PASSWORD_MIN_LENGTH=0 (no requirement) ────────────────────────────────────
 
 
-async def test_zero_min_length_allows_any_password(unauthed_client: AsyncClient, monkeypatch):
+async def test_zero_min_length_allows_any_password(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 0)
-    r = await _register(unauthed_client, "Alice", "x")  # 1 char, no digit/letter requirement
+    r = await _register(
+        unauthed_client, "Alice", "x"
+    )  # 1 char, no digit/letter requirement
     assert r.status_code == 201
 
 
-async def test_zero_min_length_allows_empty_password(unauthed_client: AsyncClient, monkeypatch):
+async def test_zero_min_length_allows_empty_password(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 0)
     r = await _register(unauthed_client, "Alice", "")
     assert r.status_code == 201
 
 
-async def test_zero_min_length_change_password_unrestricted(unauthed_client: AsyncClient, monkeypatch):
+async def test_zero_min_length_change_password_unrestricted(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 0)
     r = await _register(unauthed_client, "Alice", "any")
     assert r.status_code == 201
@@ -180,7 +210,9 @@ async def test_zero_min_length_change_password_unrestricted(unauthed_client: Asy
     assert r2.status_code == 204
 
 
-async def test_config_endpoint_reflects_zero_min_length(unauthed_client: AsyncClient, monkeypatch):
+async def test_config_endpoint_reflects_zero_min_length(
+    unauthed_client: AsyncClient, monkeypatch
+):
     monkeypatch.setattr(config_module.settings, "password_min_length", 0)
     r = await unauthed_client.get("/api/config")
     assert r.json()["password_min_length"] == 0

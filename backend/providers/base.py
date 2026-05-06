@@ -10,7 +10,9 @@ MAX_TOOL_ITERATIONS = 10
 async def execute_tool(name: str, args: dict) -> dict:
     if name == "generate_image":
         return await _generate_image(
-            args.get("prompt", ""), args.get("size", "1024x1024"), args.get("image_path")
+            args.get("prompt", ""),
+            args.get("size", "1024x1024"),
+            args.get("image_path"),
         )
     if name == "calculate":
         return _calculate(args.get("expression", ""))

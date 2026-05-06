@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon, Menu } from "lucide-react";
-import { api } from "../lib/api";
+import { api, modelLabel } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
 import type { Chat, Message } from "../types";
 import { MODELS, PROVIDER_LABELS } from "../types";
@@ -64,14 +64,14 @@ function ModelSwitcher({ chatId, provider, model, disabled }: {
         disabled={disabled}
         title="Switch model"
       >
-        {PROVIDER_LABELS[provider] ?? provider} · {model}
+        {PROVIDER_LABELS[provider] ?? provider} · {modelLabel(remoteModels, provider, model)}
         <ChevronDownIcon size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
         <div className="absolute top-full left-0 mt-1 z-50 bg-elevated border border-border rounded-xl shadow-xl p-3 min-w-56">
           <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted mb-2">Switch Model</p>
-          {(["openai", "anthropic"] as const).map((p) => (
+          {(["openai", "anthropic", "ollama"] as const).filter((p) => modelsFor(p).length > 0).map((p) => (
             <div key={p} className="mb-2 last:mb-0">
               <p className="text-[0.7rem] text-muted mb-1">{PROVIDER_LABELS[p]}</p>
               {modelsFor(p).map((m) => (
@@ -113,6 +113,19 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
   const chatMeta = useQuery({
     queryKey: ["chat", chatId],
     queryFn: () => api.getChat(chatId),
+  });
+
+  const { data: config } = useQuery({
+    queryKey: ["config"],
+    queryFn: api.getConfig,
+    staleTime: Infinity,
+  });
+  const allowSwitchingModels = config?.allow_switching_models ?? true;
+
+  const { data: remoteModels } = useQuery({
+    queryKey: ["models"],
+    queryFn: api.getModels,
+    staleTime: 3_600_000,
   });
 
   const toggleWebSearch = useMutation({
@@ -178,13 +191,18 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
             >
               {meta?.title ?? "…"}
             </h2>
-            {meta && (
+            {meta && allowSwitchingModels && (
               <ModelSwitcher
                 chatId={chatId}
                 provider={meta.provider}
                 model={meta.model}
                 disabled={sending}
               />
+            )}
+            {meta && !allowSwitchingModels && (
+              <p className="text-[0.7rem] text-muted">
+                {PROVIDER_LABELS[meta.provider] ?? meta.provider} · {modelLabel(remoteModels, meta.provider, meta.model)}
+              </p>
             )}
           </div>
         </div>

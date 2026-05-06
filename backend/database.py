@@ -17,6 +17,8 @@ def _set_sqlite_pragma(dbapi_connection, _connection_record):
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
+
+
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 # project root (one level up from this file's package)

@@ -13,21 +13,25 @@ interface Props {
 const PROVIDER_ICONS: Record<string, string> = {
   openai: "🟢",
   anthropic: "🟠",
+  ollama: "🦙",
 };
+
+const ALL_PROVIDERS = ["openai", "anthropic", "ollama"] as const;
+type Provider = typeof ALL_PROVIDERS[number];
 
 const LAST_PROVIDER_KEY = "simplechat_last_provider";
 
-function getLastProvider(): "openai" | "anthropic" {
+function getLastProvider(): Provider {
   try {
     const v = localStorage.getItem(LAST_PROVIDER_KEY);
-    if (v === "openai" || v === "anthropic") return v;
+    if (ALL_PROVIDERS.includes(v as Provider)) return v as Provider;
   } catch { /* ignore */ }
   return "anthropic";
 }
 
 export default function NewChatDialog({ onCreated, onClose }: Props) {
   const qc = useQueryClient();
-  const [provider, setProvider] = useState<"openai" | "anthropic">(getLastProvider);
+  const [provider, setProvider] = useState<Provider>(getLastProvider);
   const [model, setModel] = useState("");
 
   const { data: remoteModels } = useQuery({
@@ -37,12 +41,12 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   });
 
   // models for a provider: only use live data once fetched; [] means not configured
-  function modelsFor(p: "openai" | "anthropic") {
+  function modelsFor(p: Provider) {
     if (!remoteModels) return null; // still loading
     return (remoteModels[p] ?? []).map((m) => ({ label: m.label, value: m.id }));
   }
 
-  const availableProviders = (["openai", "anthropic"] as const).filter((p) => {
+  const availableProviders = ALL_PROVIDERS.filter((p) => {
     const m = modelsFor(p);
     return m === null || m.length > 0; // null = loading, show optimistically
   });
@@ -50,9 +54,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   // when live data arrives, switch away from any now-unavailable provider
   useEffect(() => {
     if (!remoteModels) return;
-    const available = (["openai", "anthropic"] as const).filter(
-      (p) => (remoteModels[p] ?? []).length > 0,
-    );
+    const available = ALL_PROVIDERS.filter((p) => (remoteModels[p] ?? []).length > 0);
     if (available.length > 0 && !available.includes(provider)) {
       setProvider(available[0]);
     }
@@ -74,7 +76,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
     },
   });
 
-  function handleProviderChange(p: "openai" | "anthropic") {
+  function handleProviderChange(p: Provider) {
     setProvider(p);
     try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch { /* ignore */ }
     const options = modelsFor(p) ?? [];
@@ -116,7 +118,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2.5">
                 Provider
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid gap-2 ${availableProviders.length >= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
                 {availableProviders.map((p) => (
                   <button
                     key={p}

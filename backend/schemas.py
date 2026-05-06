@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .config import settings
 
-PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6"}
+PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6", "ollama": ""}
 
 
 class ChatCreate(BaseModel):
-    provider: str = Field(..., pattern="^(openai|anthropic)$")
+    provider: str = Field(..., pattern="^(openai|anthropic|ollama)$")
     model: str | None = None
     title: str | None = None  # None means no explicit title; auto-title will apply
 
@@ -19,7 +19,7 @@ class ChatUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     web_search_enabled: bool | None = None
     model: str | None = None
-    provider: str | None = Field(default=None, pattern="^(openai|anthropic)$")
+    provider: str | None = Field(default=None, pattern="^(openai|anthropic|ollama)$")
 
     @model_validator(mode="after")
     def model_and_provider_must_change_together(self) -> "ChatUpdate":

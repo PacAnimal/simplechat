@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon, SearchIcon, XIcon } from "lucide-react";
-import { api } from "../lib/api";
+import { api, modelLabel } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
 import type { Chat, MessageSearchResult, Profile } from "../types";
 import { PROVIDER_LABELS } from "../types";
@@ -43,6 +43,12 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
     queryKey: ["chats"],
     queryFn: api.listChats,
     refetchInterval: 15_000,
+  });
+
+  const { data: models } = useQuery({
+    queryKey: ["models"],
+    queryFn: api.getModels,
+    staleTime: 3_600_000,
   });
 
   const { data: searchResults = [], isFetching: searching } = useQuery({
@@ -221,7 +227,7 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
                     {chat.title}
                   </p>
                   <p className="text-[0.7rem] text-muted truncate mt-0.5">
-                    {PROVIDER_LABELS[chat.provider]} · {shortModel(chat.model)}
+                    {PROVIDER_LABELS[chat.provider]} · {modelLabel(models, chat.provider, chat.model)}
                   </p>
                 </div>
 
@@ -275,13 +281,3 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
   );
 }
 
-function shortModel(model: string): string {
-  if (model.startsWith("claude-opus")) return "Opus";
-  if (model.startsWith("claude-sonnet")) return "Sonnet";
-  if (model.startsWith("claude-haiku")) return "Haiku";
-  if (model === "gpt-4o") return "GPT-4o";
-  if (model === "gpt-4o-mini") return "4o mini";
-  if (model === "gpt-4-turbo") return "GPT-4T";
-  if (model === "o1-mini") return "o1-mini";
-  return model.slice(0, 10);
-}
