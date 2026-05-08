@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,6 +17,7 @@ import SvgCanvas from "./SvgCanvas";
 interface Props {
   message: Message;
   images?: InlineImage[];
+  noAnimate?: boolean;
 }
 
 function Avatar({ role }: { role: string }) {
@@ -340,11 +341,19 @@ function AssistantContent({ content }: { content: string }) {
   );
 }
 
-export default function MessageBubble({ message, images = message.images ?? [] }: Props) {
+export default function MessageBubble({ message, images = message.images ?? [], noAnimate = false }: Props) {
   const isUser = message.role === "user";
+  // once noAnimate is set, permanently suppress the animation for this element's lifetime
+  // so it doesn't retrigger if the prop clears when the next stream completes
+  const suppressAnim = useRef(noAnimate);
+  if (noAnimate) suppressAnim.current = true;
 
   return (
-    <div className="group flex gap-3 max-w-3xl w-full mx-auto animate-fade-in" data-testid={`message-${message.role}`}>
+    <div
+      className="group flex gap-3 max-w-3xl w-full mx-auto animate-fade-in"
+      style={suppressAnim.current ? { animation: "none" } : undefined}
+      data-testid={`message-${message.role}`}
+    >
       <Avatar role={message.role} />
       <div className="flex-1 min-w-0 pt-0.5">
         <p className="text-xs font-semibold text-muted mb-1.5">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
+import DatasetManager from "./components/DatasetManager";
 import NewChatDialog from "./components/NewChatDialog";
 import ProfilePicker from "./components/ProfilePicker";
 import { clearToken, getStoredProfile } from "./lib/api";
@@ -14,6 +15,7 @@ export default function App() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
 
   // listen for 401 events from api.ts
   useEffect(() => {
@@ -39,6 +41,7 @@ export default function App() {
   function handleSelectChat(id: number | null) {
     setSelectedChatId(id);
     setSidebarOpen(false);
+    setResourcesOpen(false);
   }
 
   function handleProfileUpdated(p: Profile) {
@@ -77,6 +80,8 @@ export default function App() {
           selectedChatId={selectedChatId}
           onSelectChat={handleSelectChat}
           onNewChat={() => { handleNewChat(); setSidebarOpen(false); }}
+          onOpenResources={() => { setResourcesOpen((o) => !o); setSidebarOpen(false); }}
+          resourcesOpen={resourcesOpen}
           onLogout={handleLogout}
           onProfileUpdated={handleProfileUpdated}
           open={sidebarOpen}
@@ -84,7 +89,9 @@ export default function App() {
         />
 
         <main className="flex-1 flex flex-col min-w-0 bg-canvas">
-          {selectedChatId ? (
+          {resourcesOpen ? (
+            <DatasetManager onClose={() => setResourcesOpen(false)} />
+          ) : selectedChatId ? (
             <ChatWindow
               key={selectedChatId}
               chatId={selectedChatId}

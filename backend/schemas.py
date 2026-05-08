@@ -9,10 +9,35 @@ from .config import settings
 PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6", "ollama": ""}
 
 
+class DatasetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+
+
+class DatasetFileMeta(BaseModel):
+    id: int
+    dataset_id: int
+    filename: str
+    mime_type: str
+    size: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DatasetRead(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    files: list[DatasetFileMeta] = []
+
+    model_config = {"from_attributes": True}
+
+
 class ChatCreate(BaseModel):
     provider: str = Field(..., pattern="^(openai|anthropic|ollama)$")
     model: str | None = None
     title: str | None = None  # None means no explicit title; auto-title will apply
+    dataset_id: int | None = None
 
 
 class ChatUpdate(BaseModel):
@@ -20,6 +45,7 @@ class ChatUpdate(BaseModel):
     web_search_enabled: bool | None = None
     model: str | None = None
     provider: str | None = Field(default=None, pattern="^(openai|anthropic|ollama)$")
+    dataset_id: int | None = Field(default=None)
 
     @model_validator(mode="after")
     def model_and_provider_must_change_together(self) -> "ChatUpdate":
@@ -36,6 +62,7 @@ class ChatRead(BaseModel):
     provider: str
     model: str
     web_search_enabled: bool
+    dataset_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

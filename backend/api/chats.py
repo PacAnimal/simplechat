@@ -9,7 +9,7 @@ from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
 from ..event_logging import log_event
-from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
+from ..models import Attachment, Chat, Dataset, GeneratedImage, Message, Profile, utcnow
 from ..schemas import (
     PROVIDER_DEFAULTS,
     ChatCreate,
@@ -98,12 +98,17 @@ async def create_chat(
             status_code=503, detail=f"{label} is not configured on this server"
         )
     model = body.model or PROVIDER_DEFAULTS.get(body.provider, "gpt-4o")
+    if body.dataset_id is not None:
+        ds = await db.get(Dataset, body.dataset_id)
+        if not ds or ds.profile_id != profile.id:
+            raise HTTPException(404, "Dataset not found")
     chat = Chat(
         profile_id=profile.id,
         title=body.title or "New Chat",
         title_is_default=(body.title is None),
         provider=body.provider,
         model=model,
+        dataset_id=body.dataset_id,
     )
     db.add(chat)
     await db.commit()
@@ -152,6 +157,12 @@ async def update_chat(
                 status_code=403, detail="Switching models is disabled on this server"
             )
         chat.provider = body.provider
+    if "dataset_id" in body.model_fields_set:
+        if body.dataset_id is not None:
+            ds = await db.get(Dataset, body.dataset_id)
+            if not ds or ds.profile_id != profile.id:
+                raise HTTPException(404, "Dataset not found")
+        chat.dataset_id = body.dataset_id
     await db.commit()
     await db.refresh(chat)
     return chat

@@ -265,41 +265,47 @@ export default function MessageInput({
           {/* toolbar row */}
           <div className="flex items-center justify-between px-3 pb-3 pt-1">
             <div className="flex items-center gap-1">
-              {/* file attach */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || disabled || attachmentsDisabled}
-                title={attachmentsDisabled ? "Attachments not supported for Ollama" : "Attach file"}
-                className="p-1.5 rounded-lg text-muted hover:text-secondary hover:bg-hover disabled:opacity-40 transition-colors"
-                data-testid="attach-button"
-              >
-                <PaperclipIcon size={16} />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFileChange}
-                accept=".txt,.md,.csv,.json,.pdf,.xls,.xlsx,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.bmp"
-              />
+              {/* file attach — hidden for ollama */}
+              {!attachmentsDisabled && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || disabled}
+                    title="Attach file"
+                    className="p-1.5 rounded-lg text-muted hover:text-secondary hover:bg-hover disabled:opacity-40 transition-colors"
+                    data-testid="attach-button"
+                  >
+                    <PaperclipIcon size={16} />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    accept=".txt,.md,.csv,.json,.pdf,.xls,.xlsx,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.bmp"
+                  />
+                </>
+              )}
 
-              {/* web search */}
-              <button
-                type="button"
-                onClick={onToggleWebSearch}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                  webSearchEnabled
-                    ? "bg-accent/15 text-accent border border-accent/30"
-                    : "text-muted hover:text-secondary hover:bg-hover",
-                )}
-                title="Toggle web search"
-                data-testid="web-search-toggle"
-              >
-                <GlobeIcon size={14} />
-                {webSearchEnabled && <span>Search</span>}
-              </button>
+              {/* web search — hidden for ollama */}
+              {!attachmentsDisabled && (
+                <button
+                  type="button"
+                  onClick={onToggleWebSearch}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                    webSearchEnabled
+                      ? "bg-accent/15 text-accent border border-accent/30"
+                      : "text-muted hover:text-secondary hover:bg-hover",
+                  )}
+                  title="Toggle web search"
+                  data-testid="web-search-toggle"
+                >
+                  <GlobeIcon size={14} />
+                  {webSearchEnabled && <span>Search</span>}
+                </button>
+              )}
             </div>
 
             {/* send button */}

@@ -12,8 +12,25 @@ export interface Chat {
   provider: "openai" | "anthropic" | "ollama";
   model: string;
   web_search_enabled: boolean;
+  dataset_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DatasetFile {
+  id: number;
+  dataset_id: number;
+  filename: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+}
+
+export interface Dataset {
+  id: number;
+  name: string;
+  created_at: string;
+  files: DatasetFile[];
 }
 
 export interface InlineImage {
@@ -60,6 +77,7 @@ export type StreamEvent =
   | { type: "tool_result"; name: string; content: string; error?: string }
   | { type: "image_generated"; url: string; prompt: string }
   | { type: "searching"; name: string }
+  | { type: "user_message_saved"; message_id: number }
   | { type: "done"; message_id: number }
   | { type: "chat_title"; title: string }
   | { type: "error"; message: string };

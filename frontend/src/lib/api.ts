@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Message, MessageSearchResult, Profile, StreamEvent } from "../types";
+import type { Attachment, Chat, Dataset, DatasetFile, Message, MessageSearchResult, Profile, StreamEvent } from "../types";
 
 const BASE = "/api";
 const TOKEN_KEY = "simplechat_token";
@@ -88,12 +88,41 @@ export const api = {
   // chats
   listChats: () => req<Chat[]>("GET", "/chats"),
   getChat: (id: number) => req<Chat>("GET", `/chats/${id}`),
-  createChat: (provider: string, model: string, title?: string) =>
-    req<Chat>("POST", "/chats", { provider, model, title }),
-  updateChat: (id: number, patch: Partial<Chat>) => req<Chat>("PATCH", `/chats/${id}`, patch),
+  createChat: (provider: string, model: string, title?: string, dataset_id?: number | null) =>
+    req<Chat>("POST", "/chats", { provider, model, title, dataset_id }),
+  updateChat: (id: number, patch: Partial<Chat> & { dataset_id?: number | null }) =>
+    req<Chat>("PATCH", `/chats/${id}`, patch),
   deleteChat: (id: number) => req<void>("DELETE", `/chats/${id}`),
   getMessages: (chatId: number) => req<Message[]>("GET", `/chats/${chatId}/messages`),
   searchMessages: (q: string) => req<MessageSearchResult[]>("GET", `/chats/messages/search?q=${encodeURIComponent(q)}`),
+  // datasets
+  listDatasets: () => req<Dataset[]>("GET", "/datasets"),
+  createDataset: (name: string) =>
+    req<Dataset>("POST", "/datasets", { name }),
+  deleteDataset: (id: number) => req<void>("DELETE", `/datasets/${id}`),
+  reindexDataset: (id: number) => req<void>("POST", `/datasets/${id}/reindex`),
+  deleteDatasetFile: (datasetId: number, fileId: number) =>
+    req<void>("DELETE", `/datasets/${datasetId}/files/${fileId}`),
+  uploadDatasetFile: async (datasetId: number, file: File): Promise<DatasetFile> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}/datasets/${datasetId}/files`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearToken();
+        window.dispatchEvent(new Event("simplechat:unauthorized"));
+        throw new Error("UNAUTHORIZED");
+      }
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`${res.status}: ${text}`);
+    }
+    return res.json();
+  },
+
   uploadFile: async (chatId: number, file: File): Promise<Attachment> => {
     const form = new FormData();
     form.append("file", file);

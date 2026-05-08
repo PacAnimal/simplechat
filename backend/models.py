@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -50,8 +51,36 @@ class Profile(Base):
     token_invalidated_at = Column(UTCDateTime, nullable=True)
 
     chats = relationship("Chat", back_populates="profile", cascade="all, delete-orphan")
+    datasets = relationship("Dataset", back_populates="profile", cascade="all, delete-orphan")
 
     __table_args__ = (UniqueConstraint("name", name="uq_profiles_name"),)
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    created_at = Column(UTCDateTime, default=utcnow)
+
+    profile = relationship("Profile", back_populates="datasets")
+    files = relationship("DatasetFile", back_populates="dataset", cascade="all, delete-orphan")
+    chats = relationship("Chat", back_populates="dataset", foreign_keys="Chat.dataset_id")
+
+
+class DatasetFile(Base):
+    __tablename__ = "dataset_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    size = Column(BigInteger, nullable=False)
+    created_at = Column(UTCDateTime, default=utcnow)
+
+    dataset = relationship("Dataset", back_populates="files")
 
 
 class Chat(Base):
@@ -59,6 +88,7 @@ class Chat(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
     title = Column(String(255), default="New Chat")
     title_is_default = Column(Boolean, default=True, nullable=False)
     provider = Column(String(50), nullable=False)
@@ -69,6 +99,7 @@ class Chat(Base):
     discarded_at = Column(UTCDateTime, nullable=True)
 
     profile = relationship("Profile", back_populates="chats")
+    dataset = relationship("Dataset", back_populates="chats", foreign_keys=[dataset_id])
     messages = relationship(
         "Message",
         back_populates="chat",

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request
 
 from ..config import settings
 from .chats import router as chats_router
+from .datasets import router as datasets_router
 from .files import router as files_router
 from .images import router as images_router
 from .models import router as models_router
@@ -16,6 +17,7 @@ router.include_router(stream_router)
 router.include_router(files_router)
 router.include_router(models_router)
 router.include_router(images_router)
+router.include_router(datasets_router)
 
 
 @router.get("/config")

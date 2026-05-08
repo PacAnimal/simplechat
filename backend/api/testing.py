@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..models import Attachment, Chat, GeneratedImage, Message, Profile
+from ..models import Attachment, Chat, Dataset, DatasetFile, GeneratedImage, Message, Profile
 
 router = APIRouter(prefix="/test", tags=["test"])
 
@@ -29,6 +29,8 @@ async def reset_db(
     await db.execute(delete(Attachment))
     await db.execute(delete(Message))
     await db.execute(delete(Chat))
+    await db.execute(delete(DatasetFile))
+    await db.execute(delete(Dataset))
     await db.execute(delete(Profile))
     await db.commit()
 

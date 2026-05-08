@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircleIcon, GlobeIcon, XIcon, ChevronDownIcon, Menu } from "lucide-react";
+import { AlertCircleIcon, DatabaseIcon, GlobeIcon, XIcon, ChevronDownIcon, Menu } from "lucide-react";
 import { api, modelLabel } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
-import type { Chat, Message } from "../types";
+import type { Chat, Dataset, Message } from "../types";
 import { MODELS, PROVIDER_LABELS } from "../types";
 import MessageBubble, { StreamingBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
@@ -96,10 +96,89 @@ function ModelSwitcher({ chatId, provider, model, disabled }: {
   );
 }
 
+function DatasetSelector({ chatId, currentDatasetId, disabled }: {
+  chatId: number;
+  currentDatasetId: number | null;
+  disabled: boolean;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: datasets = [] } = useQuery<Dataset[]>({
+    queryKey: ["datasets"],
+    queryFn: api.listDatasets,
+  });
+
+  const setDataset = useMutation({
+    mutationFn: (id: number | null) => api.updateChat(chatId, { dataset_id: id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", chatId] });
+      setOpen(false);
+    },
+  });
+
+  const current = datasets.find((d) => d.id === currentDatasetId);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => !disabled && setOpen((o) => !o)}
+        className="flex items-center gap-1 text-[0.7rem] text-muted hover:text-secondary transition-colors disabled:cursor-not-allowed"
+        disabled={disabled}
+        title="Select dataset"
+        data-testid="dataset-selector"
+      >
+        <DatabaseIcon size={10} />
+        {current ? current.name : "No dataset"}
+        <ChevronDownIcon size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-elevated border border-border rounded-xl shadow-xl p-2 min-w-48">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted mb-1 px-1.5">Dataset</p>
+          <button
+            onClick={() => setDataset.mutate(null)}
+            className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors mb-0.5 ${
+              currentDatasetId === null ? "bg-accent/15 text-accent" : "text-secondary hover:bg-hover hover:text-primary"
+            }`}
+          >
+            None
+          </button>
+          {datasets.map((ds) => (
+            <button
+              key={ds.id}
+              onClick={() => setDataset.mutate(ds.id)}
+              className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors mb-0.5 ${
+                currentDatasetId === ds.id ? "bg-accent/15 text-accent" : "text-secondary hover:bg-hover hover:text-primary"
+              }`}
+            >
+              <span className="block truncate">{ds.name}</span>
+              <span className="text-[0.65rem] text-muted">{ds.files.length} file{ds.files.length !== 1 ? "s" : ""}</span>
+            </button>
+          ))}
+          {datasets.length === 0 && (
+            <p className="text-xs text-muted px-2.5 py-1.5">No datasets — create one in Resources</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Props) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { activeStreams, unreadChats, startStream, cancelStream, markRead } = useStream();
+  const { activeStreams, unreadChats, justCompletedMsgId, startStream, cancelStream, markRead, clearJustCompleted } = useStream();
 
   const stream = activeStreams.get(chatId);
   const sending = stream?.status === "streaming";
@@ -137,6 +216,11 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
     },
   });
 
+  // clear "just completed" flag when switching chats
+  useEffect(() => {
+    clearJustCompleted();
+  }, [chatId, clearJustCompleted]);
+
   // dismiss notification when this chat is open
   useEffect(() => {
     markRead(chatId);
@@ -154,19 +238,6 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
   }, [messages.length, stream?.content, stream?.images.length, stream?.toolCalls.length]);
 
   function handleSend(content: string, attachmentIds: number[]) {
-    // optimistic user message
-    qc.setQueryData(["messages", chatId], (old: Message[] | undefined) => [
-      ...(old ?? []),
-      {
-        id: -Date.now(),
-        chat_id: chatId,
-        role: "user" as const,
-        content,
-        thinking: null,
-        images: [],
-        created_at: new Date().toISOString(),
-      },
-    ]);
     startStream(chatId, content, attachmentIds);
   }
 
@@ -176,7 +247,7 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
     <div className="flex flex-col h-full bg-canvas" data-testid="chat-window">
       {/* slim header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border/50 flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <button
             onClick={onOpenSidebar}
             className="wide:hidden flex-shrink-0 p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
@@ -184,7 +255,7 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
           >
             <Menu size={18} />
           </button>
-          <div className="min-w-0">
+          <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap min-w-0">
             <h2
               className="text-sm font-semibold text-primary truncate"
               data-testid="chat-title"
@@ -200,9 +271,16 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
               />
             )}
             {meta && !allowSwitchingModels && (
-              <p className="text-[0.7rem] text-muted">
+              <p className="text-[0.7rem] text-muted flex-shrink-0">
                 {PROVIDER_LABELS[meta.provider] ?? meta.provider} · {modelLabel(remoteModels, meta.provider, meta.model)}
               </p>
+            )}
+            {meta?.provider === "ollama" && (
+              <DatasetSelector
+                chatId={chatId}
+                currentDatasetId={meta.dataset_id}
+                disabled={sending}
+              />
             )}
           </div>
         </div>
@@ -226,7 +304,7 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
         ) : (
           <div className="space-y-6">
             {messages.map((msg: Message) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} noAnimate={msg.id === justCompletedMsgId} />
             ))}
 
             {stream?.status === "streaming" && (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon, SearchIcon, XIcon } from "lucide-react";
+import { DatabaseIcon, PlusIcon, Trash2Icon, MessageSquareIcon, BotIcon, SearchIcon, XIcon } from "lucide-react";
 import { api, modelLabel } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
 import type { Chat, MessageSearchResult, Profile } from "../types";
@@ -14,6 +14,8 @@ interface Props {
   selectedChatId: number | null;
   onSelectChat: (id: number | null) => void;
   onNewChat: () => void;
+  onOpenResources: () => void;
+  resourcesOpen: boolean;
   onLogout: () => void;
   onProfileUpdated: (profile: Profile) => void;
   open: boolean;
@@ -29,7 +31,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onLogout, onProfileUpdated, open }: Props) {
+export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onOpenResources, resourcesOpen, onLogout, onProfileUpdated, open }: Props) {
   const qc = useQueryClient();
   const { activeStreams, unreadChats } = useStream();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -128,6 +130,19 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
             data-testid="search-button"
           >
             <SearchIcon size={16} />
+          </button>
+          <button
+            onClick={onOpenResources}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              resourcesOpen
+                ? "bg-accent/15 text-accent"
+                : "hover:bg-hover text-muted hover:text-primary",
+            )}
+            title="Datasets"
+            data-testid="resources-button"
+          >
+            <DatabaseIcon size={16} />
           </button>
           <button
             onClick={onNewChat}

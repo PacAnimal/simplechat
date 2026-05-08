@@ -15,7 +15,7 @@ from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
 from ..event_logging import audit_message, log_event
-from ..models import Attachment, Chat, GeneratedImage, Message, Profile, utcnow
+from ..models import Attachment, Chat, Dataset, GeneratedImage, Message, Profile, utcnow
 from ..providers import AnthropicProvider, OllamaProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
 from ..schemas import SendMessageRequest
@@ -314,6 +314,62 @@ async def _generate_chat_title(
     return user_content[:60].strip() or "New Chat"
 
 
+_SUMMARY_CHAR_THRESHOLD = 6_000  # ~1500 tokens; trigger point for small-model context limits
+_SUMMARY_KEEP_RECENT = 8         # messages kept verbatim (4 user+assistant turns)
+
+
+async def _summarize_history(
+    messages: list[dict], model: str, ollama_url: str
+) -> list[dict]:
+    """Compress old messages into a summary when the conversation grows too long.
+
+    Keeps the most recent _SUMMARY_KEEP_RECENT messages verbatim so the model
+    retains immediate context; older turns are distilled into a single summary
+    exchange at the front of the list.
+    """
+    total = sum(len(str(m.get("content", ""))) for m in messages)
+    if total <= _SUMMARY_CHAR_THRESHOLD or len(messages) <= _SUMMARY_KEEP_RECENT:
+        return messages
+
+    old = messages[:-_SUMMARY_KEEP_RECENT]
+    recent = messages[-_SUMMARY_KEEP_RECENT:]
+
+    if len(old) < 3:
+        return messages
+
+    history_text = "\n".join(
+        f"{m['role'].capitalize()}: {str(m.get('content', ''))[:400]}"
+        for m in old
+    )
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key="ollama", base_url=ollama_url.rstrip("/") + "/v1")
+        resp = await client.chat.completions.create(
+            model=model,
+            max_tokens=200,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Summarize the following conversation in 2-3 sentences, preserving key facts and decisions.",
+                },
+                {"role": "user", "content": history_text},
+            ],
+        )
+        summary = (resp.choices[0].message.content or "").strip()
+        if summary:
+            return [
+                {"role": "user", "content": f"[Summary of earlier conversation: {summary}]"},
+                {"role": "assistant", "content": "Understood."},
+                *recent,
+            ]
+    except Exception:
+        logger.warning("Conversation summarization failed", exc_info=True)
+
+    # fallback: just drop old messages rather than blowing the context window
+    return recent
+
+
 async def _event_stream(
     chat: Chat,
     user_content: str,
@@ -332,10 +388,56 @@ async def _event_stream(
             lock.release()
 
     try:
-        await _save_user_message(chat.id, user_content, attachment_ids, db)
+        user_msg = await _save_user_message(chat.id, user_content, attachment_ids, db)
+        yield f"data: {json.dumps({'type': sse_events.USER_MESSAGE_SAVED, 'message_id': user_msg.id})}\n\n"
         messages = await _build_messages(chat.id, db)
-        provider = _get_provider(chat)
         real_model = model_registry.resolve_model_id(chat.provider, chat.model)
+
+        # summarize old turns before injecting RAG so context window stays manageable
+        if chat.provider == "ollama" and settings.ollama_api_url:
+            messages = await _summarize_history(messages, real_model, settings.ollama_api_url)
+
+        # inject RAG context for ollama chats with an active dataset
+        if chat.provider == "ollama" and chat.dataset_id and settings.ollama_api_url:
+            dataset = await db.get(Dataset, chat.dataset_id)
+            if dataset and messages:
+                try:
+                    from ..rag.embedder import EMBED_MODEL, OllamaEmbeddingFunction
+                    from ..rag.store import query_collection
+                    embed_fn = OllamaEmbeddingFunction(settings.ollama_api_url, EMBED_MODEL)
+                    # history-aware query: include recent turns so follow-up questions resolve correctly
+                    history_query = " ".join(
+                        str(m["content"])[:300]
+                        for m in messages[-5:]
+                        if isinstance(m.get("content"), str)
+                    ).strip() or user_content
+                    logger.info(
+                        "RAG: chat=%d dataset=%d(%r) query=%r",
+                        chat.id, chat.dataset_id, dataset.name, history_query[:120],
+                    )
+                    chunks = await asyncio.to_thread(
+                        query_collection, chat.dataset_id, embed_fn, history_query
+                    )
+                    if chunks:
+                        rag_text = "\n\n---\n\n".join(chunks)
+                        prefix = f"[Relevant context from dataset \"{dataset.name}\"]\n{rag_text}\n\n[User message]\n"
+                        last = messages[-1]
+                        if isinstance(last["content"], str):
+                            last["content"] = prefix + last["content"]
+                        elif isinstance(last["content"], list):
+                            for block in last["content"]:
+                                if block.get("type") == "text":
+                                    block["text"] = prefix + block["text"]
+                                    break
+                        logger.info("RAG: injected %d chunk(s) into chat %d message", len(chunks), chat.id)
+                    else:
+                        logger.warning("RAG: 0 chunks returned for chat %d — model will have no context", chat.id)
+                except Exception:
+                    logger.warning("RAG context injection failed for chat %d", chat.id, exc_info=True)
+        elif chat.provider == "ollama" and not chat.dataset_id:
+            logger.debug("RAG: skipped for chat %d — no dataset selected", chat.id)
+
+        provider = _get_provider(chat)
 
         full_content = ""
         thinking_content = ""

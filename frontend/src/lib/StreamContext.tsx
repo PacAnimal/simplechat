@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { streamMessage } from "./api";
-import type { ToolCallRecord } from "../types";
+import type { Message, ToolCallRecord } from "../types";
 
 export type ActiveStream = {
   status: "streaming" | "error";
@@ -15,9 +15,11 @@ export type ActiveStream = {
 type StreamContextValue = {
   activeStreams: Map<number, ActiveStream>;
   unreadChats: Set<number>;
+  justCompletedMsgId: number | null;
   startStream: (chatId: number, content: string, attachmentIds: number[]) => void;
   cancelStream: (chatId: number) => void;
   markRead: (chatId: number) => void;
+  clearJustCompleted: () => void;
 };
 
 const StreamContext = createContext<StreamContextValue | null>(null);
@@ -26,6 +28,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const [activeStreams, setActiveStreams] = useState<Map<number, ActiveStream>>(new Map());
   const [unreadChats, setUnreadChats] = useState<Set<number>>(new Set());
+  const [justCompletedMsgId, setJustCompletedMsgId] = useState<number | null>(null);
   const controllers = useRef<Map<number, AbortController>>(new Map());
 
   useEffect(() => {
@@ -42,6 +45,8 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  const clearJustCompleted = useCallback(() => setJustCompletedMsgId(null), []);
 
   const markRead = useCallback((chatId: number) => {
     setUnreadChats((prev) => {
@@ -75,12 +80,18 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
 
+      // local accumulators so we can write to cache atomically on done
+      let accContent = "";
+      let accThinking = "";
+      let accImages: Message["images"] = [];
+
       try {
         for await (const event of streamMessage(chatId, content, attachmentIds, controller.signal)) {
           if (controller.signal.aborted) break;
 
           switch (event.type) {
             case "text_delta":
+              accContent += event.content;
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
@@ -88,6 +99,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
               });
               break;
             case "thinking_delta":
+              accThinking += event.content;
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
@@ -95,6 +107,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
               });
               break;
             case "image_generated":
+              accImages = [...accImages, { url: event.url, prompt: event.prompt }];
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
@@ -138,18 +151,51 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
                 return new Map(prev).set(chatId, { ...entry, toolCalls: calls });
               });
               break;
+            case "user_message_saved":
+              qc.setQueryData<Message[]>(["messages", chatId], (old) => [
+                ...(old ?? []),
+                {
+                  id: event.message_id,
+                  chat_id: chatId,
+                  role: "user" as const,
+                  content,
+                  thinking: null,
+                  images: [],
+                  attachments: [],
+                  created_at: new Date().toISOString(),
+                },
+              ]);
+              break;
             case "chat_title":
               qc.invalidateQueries({ queryKey: ["chats"] });
               qc.invalidateQueries({ queryKey: ["chat", chatId] });
               break;
             case "done":
-              qc.invalidateQueries({ queryKey: ["messages", chatId] });
               controllers.current.delete(chatId);
+              // write the AI response into the cache with the real server ID, then
+              // remove the stream bubble — all in the same synchronous block so
+              // React 18 batches them into a single render with no flash
+              setJustCompletedMsgId(event.message_id);
+              qc.setQueryData<Message[]>(["messages", chatId], (old) => [
+                ...(old ?? []),
+                {
+                  id: event.message_id,
+                  chat_id: chatId,
+                  role: "assistant" as const,
+                  content: accContent,
+                  thinking: accThinking || null,
+                  images: accImages,
+                  attachments: [],
+                  created_at: new Date().toISOString(),
+                },
+              ]);
               setActiveStreams((prev) => {
                 const next = new Map(prev);
                 next.delete(chatId);
                 return next;
               });
+              // background refetch for canonical data; same message_id → no remount
+              qc.invalidateQueries({ queryKey: ["messages", chatId] });
               setUnreadChats((prev) => new Set(prev).add(chatId));
               break;
             case "error":
@@ -187,7 +233,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <StreamContext.Provider value={{ activeStreams, unreadChats, startStream, cancelStream, markRead }}>
+    <StreamContext.Provider value={{ activeStreams, unreadChats, justCompletedMsgId, startStream, cancelStream, markRead, clearJustCompleted }}>
       {children}
     </StreamContext.Provider>
   );

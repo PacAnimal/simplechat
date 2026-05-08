@@ -1,0 +1,64 @@
+MOTOCRAFT ZX-9000 SERVICE MANUAL
+Revision 3 - Internal use only
+
+ENGINE SPECIFICATIONS
+
+  Model:               Motocraft ZX-9000
+  Type:                Single-cylinder, liquid-cooled, 4-stroke, DOHC
+  Displacement:        742 cc
+  Bore x Stroke:       97.0 x 100.4 mm
+  Compression ratio:   11.3:1
+  Spark plug gap:      1.23 mm
+  Idle speed:          1450 +/- 100 r/min
+  Valve clearance (cold):
+    Intake:            0.14-0.18 mm
+    Exhaust:           0.23-0.27 mm
+
+ENGINE FLUIDS
+
+  Engine oil capacity:
+    Without filter:    3.47 L
+    With filter:       3.61 L
+  Coolant capacity:    1.83 L
+
+ELECTRICAL
+
+  Battery:             YTX14B-7, 12 V / 10.5 Ah
+  Main fuse:           37.0 A
+  Headlight fuse:      22.0 A
+  Radiator fan fuse:   8.5 A
+
+TORQUE SPECIFICATIONS
+
+  Spark plug:          22 Nm
+  Cylinder head bolt:  51 Nm
+  Oil drain plug:      29 Nm
+  Rear axle nut:       118 Nm
+
+MAINTENANCE INTERVALS
+
+  Engine oil:          every 4500 km
+  Air filter:          every 9000 km
+  Coolant:             every 27000 km
+  Spark plug:          every 13500 km
+
+WATER PUMP REMOVAL PROCEDURE
+
+The water pump is located behind the right-side engine cover and is not directly
+accessible. The following components must be removed in order before the pump
+can be reached.
+
+  Step a: Remove the right fairing panel (3 bolts, pull outward from the bottom clip first).
+  Step b: Drain the coolant by opening the drain bolt on the lower radiator hose.
+  Step c: Disconnect the upper and lower radiator hoses from the engine.
+  Step d: Remove the radiator (4 mounting bolts, slide forward to clear the frame tabs).
+  Step e: Remove the exhaust header pipe (2 flange nuts at the cylinder head, 1 clamp bolt
+          at the mid-pipe junction).
+  Step f: Remove the right engine cover (6 bolts of varying length - note positions for
+          reassembly; cover has a locating dowel at the lower-left corner).
+  Step g: Remove the oil pump drive sprocket and chain (1 circlip, slide sprocket off shaft).
+  Step h: The water pump body is now accessible. Remove the 3 pump mounting bolts and
+          pull the pump straight out. Discard the O-ring seal and replace on reassembly.
+
+Reassemble in reverse order. Torque the engine cover bolts to 12 Nm and refill
+with coolant (capacity 1.83 L). Run the engine and check for leaks.
