@@ -454,6 +454,14 @@ function ThinkingPanel({ content }: { content: string }) {
   );
 }
 
+function sourceDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 function ToolCallsPanel({ calls }: { calls: ToolCallRecord[] }) {
   return (
     <div className="flex flex-col gap-1 mb-2" data-testid="tool-calls-bubble">
@@ -469,13 +477,37 @@ function ToolCallsPanel({ calls }: { calls: ToolCallRecord[] }) {
           }`}
         >
           <ToolIcon name={call.name} />
-          <span>{TOOL_LABELS[call.name] ?? call.name}</span>
+          <span className="shrink-0">{TOOL_LABELS[call.name] ?? call.name}</span>
+          {call.done && call.sources && call.sources.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-1 flex-wrap">
+              {call.sources.slice(0, 6).map((url, j) => {
+                const domain = sourceDomain(url);
+                return (
+                  <a
+                    key={j}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                    data-testid="search-source-chip"
+                  >
+                    <img
+                      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                      alt=""
+                      className="w-3 h-3 rounded-sm"
+                    />
+                    <span className="text-[0.65rem]">{domain}</span>
+                  </a>
+                );
+              })}
+            </div>
+          )}
           {call.error ? (
-            <AlertCircleIcon size={11} className="ml-auto" />
+            <AlertCircleIcon size={11} className="ml-auto shrink-0" />
           ) : call.done ? (
-            <CheckIcon size={11} className="ml-auto text-muted" />
+            <CheckIcon size={11} className="ml-auto shrink-0 text-muted" />
           ) : (
-            <LoaderIcon size={11} className="ml-auto animate-spin" />
+            <LoaderIcon size={11} className="ml-auto shrink-0 animate-spin" />
           )}
         </div>
       ))}

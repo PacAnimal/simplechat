@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -12,7 +11,6 @@ from .base import (
     CALCULATOR_TOOL,
     GENERATE_IMAGE_TOOL,
     MAX_TOOL_ITERATIONS,
-    WEB_SEARCH_TOOL_OPENAI,
     ChatMessage,
     StreamEvent,
     tool_result_event,
@@ -76,33 +74,8 @@ def _responses_tools(include_web_search: bool) -> list:
         },
     ]
     if include_web_search:
-        tools.append({
-            "type": "function",
-            "name": WEB_SEARCH_TOOL_OPENAI["name"],
-            "description": WEB_SEARCH_TOOL_OPENAI["description"],
-            "parameters": WEB_SEARCH_TOOL_OPENAI["parameters"],
-        })
+        tools.append({"type": "web_search"})
     return tools
-
-
-async def _web_search(query: str) -> str:
-    try:
-        from duckduckgo_search import DDGS
-
-        def _sync():
-            return list(DDGS().text(query, max_results=6))
-
-        results = await asyncio.to_thread(_sync)
-        if not results:
-            return "No results found."
-        lines = []
-        for r in results:
-            lines.append(
-                f"**{r.get('title', '')}**\n{r.get('body', '')}\nSource: {r.get('href', '')}"
-            )
-        return "\n\n---\n\n".join(lines)
-    except Exception as e:
-        return f"Search failed: {e}"
 
 
 class OpenAIProvider:
@@ -117,7 +90,9 @@ class OpenAIProvider:
         model: str,
         web_search: bool = False,
     ) -> AsyncIterator[StreamEvent]:
-        if model in _responses_api_models:
+        # web search always uses the Responses API — native web_search tool works for
+        # all current OpenAI models and eliminates the need for a third-party search client
+        if web_search or model in _responses_api_models:
             return self._stream_responses(messages, model, web_search)
         return self._stream_with_fallback(messages, model, web_search)
 
@@ -128,7 +103,7 @@ class OpenAIProvider:
         web_search: bool,
     ) -> AsyncIterator[StreamEvent]:
         try:
-            async for event in self._stream(messages, model, web_search):
+            async for event in self._stream(messages, model):
                 yield event
         except openai.APIStatusError as e:
             if "v1/responses" in str(e):
@@ -143,14 +118,11 @@ class OpenAIProvider:
         self,
         messages: list[ChatMessage],
         model: str,
-        web_search: bool,
     ) -> AsyncIterator[StreamEvent]:
         tools = [
             {"type": "function", "function": GENERATE_IMAGE_TOOL},
             {"type": "function", "function": CALCULATOR_TOOL},
         ]
-        if web_search:
-            tools.append({"type": "function", "function": WEB_SEARCH_TOOL_OPENAI})
 
         current_messages: list = [
             {"role": m["role"], "content": _to_openai_content(m["content"])}
@@ -160,21 +132,16 @@ class OpenAIProvider:
 
         while True:
             iteration += 1
-            if iteration > MAX_TOOL_ITERATIONS:
-                yield {
-                    "type": sse_events.ERROR,
-                    "message": "Tool loop exceeded maximum iterations",
-                }
-                break
+            exceeded = iteration > MAX_TOOL_ITERATIONS
+            if exceeded:
+                logger.warning("Tool loop hit max iterations (%d) for model %s — forcing final response", MAX_TOOL_ITERATIONS, model)
 
             tool_call_accum: dict[int, dict] = {}
 
-            stream = await self.client.chat.completions.create(
-                model=model,
-                messages=current_messages,  # type: ignore
-                tools=tools,  # type: ignore
-                stream=True,
-            )
+            create_kwargs: dict = dict(model=model, messages=current_messages, stream=True)
+            if not exceeded:
+                create_kwargs["tools"] = tools
+            stream = await self.client.chat.completions.create(**create_kwargs)  # type: ignore
 
             async for chunk in stream:
                 if not chunk.choices:
@@ -200,7 +167,7 @@ class OpenAIProvider:
                         if tc.function and tc.function.arguments:
                             tool_call_accum[idx]["arguments"] += tc.function.arguments
 
-            if not tool_call_accum:
+            if not tool_call_accum or exceeded:
                 break
 
             assistant_tool_calls = [
@@ -225,47 +192,36 @@ class OpenAIProvider:
                 except json.JSONDecodeError:
                     args = {}
 
-                if tc["name"] == "web_search":
-                    yield {"type": sse_events.SEARCHING, "name": "web_search"}
-                    result_text = await _web_search(args.get("query", ""))
+                yield {"type": sse_events.TOOL_START, "name": tc["name"]}
+                try:
+                    result = await _execute_tool(tc["name"], args)
+                    if tc["name"] == "generate_image":
+                        yield {
+                            "type": sse_events.IMAGE_GENERATED,
+                            "url": result["url"],
+                            "prompt": result["prompt"],
+                            "path": result["path"],
+                        }
+                    yield tool_result_event(tc["name"], result)
                     current_messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": tc["id"],
-                            "content": result_text,
+                            "content": result.get("text", "Done."),
                         }
                     )  # type: ignore
-                else:
-                    yield {"type": sse_events.TOOL_START, "name": tc["name"]}
-                    try:
-                        result = await _execute_tool(tc["name"], args)
-                        if tc["name"] == "generate_image":
-                            yield {
-                                "type": sse_events.IMAGE_GENERATED,
-                                "url": result["url"],
-                                "prompt": result["prompt"],
-                                "path": result["path"],
-                            }
-                        yield tool_result_event(tc["name"], result)
-                        current_messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "content": result.get("text", "Done."),
-                            }
-                        )  # type: ignore
-                    except Exception as e:
-                        logger.exception("Tool %s failed", tc["name"])
-                        err = f"Tool error: {e}"
-                        yield {
-                            "type": sse_events.TOOL_RESULT,
-                            "name": tc["name"],
-                            "content": err,
-                            "error": err,
-                        }
-                        current_messages.append(
-                            {"role": "tool", "tool_call_id": tc["id"], "content": err}
-                        )  # type: ignore
+                except Exception as e:
+                    logger.exception("Tool %s failed", tc["name"])
+                    err = f"Tool error: {e}"
+                    yield {
+                        "type": sse_events.TOOL_RESULT,
+                        "name": tc["name"],
+                        "content": err,
+                        "error": err,
+                    }
+                    current_messages.append(
+                        {"role": "tool", "tool_call_id": tc["id"], "content": err}
+                    )  # type: ignore
 
     async def _stream_responses(
         self,
@@ -279,28 +235,44 @@ class OpenAIProvider:
 
         while True:
             iteration += 1
-            if iteration > MAX_TOOL_ITERATIONS:
-                yield {
-                    "type": sse_events.ERROR,
-                    "message": "Tool loop exceeded maximum iterations",
-                }
-                break
+            exceeded = iteration > MAX_TOOL_ITERATIONS
+            if exceeded:
+                logger.warning("Tool loop hit max iterations (%d) for model %s — forcing final response", MAX_TOOL_ITERATIONS, model)
 
+            # custom function_calls only (web search is native and handled within the response)
             tool_calls: list[dict] = []
+            # buffer text per iteration so intermediate tool-loop text never reaches the client
+            pending_text: list[str] = []
 
             stream = await self.client.responses.create(
                 model=model,
                 input=current_input,  # type: ignore
-                tools=tools,  # type: ignore
+                tools=[] if exceeded else tools,  # type: ignore
                 stream=True,
             )
 
             async for event in stream:
                 if event.type == "response.output_text.delta":
-                    yield {"type": sse_events.TEXT_DELTA, "content": event.delta}
+                    pending_text.append(event.delta)
+                elif event.type == "response.web_search_call.in_progress":
+                    yield {"type": sse_events.SEARCHING, "name": "web_search"}
                 elif event.type == "response.output_item.done":
                     item = event.item
-                    if getattr(item, "type", None) == "function_call":
+                    item_type = getattr(item, "type", None)
+                    if item_type == "web_search_call":
+                        # extract source URLs from the completed search result
+                        sources = [
+                            r.url
+                            for r in (getattr(item, "results", None) or [])
+                            if getattr(r, "url", None)
+                        ]
+                        yield {
+                            "type": sse_events.TOOL_RESULT,
+                            "name": "web_search",
+                            "content": "",
+                            "sources": sources,
+                        }
+                    elif not exceeded and item_type == "function_call":
                         tool_calls.append({
                             "call_id": item.call_id,
                             "name": item.name,
@@ -313,51 +285,46 @@ class OpenAIProvider:
                             "arguments": item.arguments,
                         })
 
-            if not tool_calls:
+            if not tool_calls or exceeded:
+                # final iteration — flush buffered text to the client
+                for chunk in pending_text:
+                    yield {"type": sse_events.TEXT_DELTA, "content": chunk}
                 break
 
+            # intermediate iteration: execute custom tool calls, discard intermediate text
             for tc in tool_calls:
                 try:
                     args = json.loads(tc["arguments"]) if tc["arguments"] else {}
                 except json.JSONDecodeError:
                     args = {}
 
-                if tc["name"] == "web_search":
-                    yield {"type": sse_events.SEARCHING, "name": "web_search"}
-                    result_text = await _web_search(args.get("query", ""))
+                yield {"type": sse_events.TOOL_START, "name": tc["name"]}
+                try:
+                    result = await _execute_tool(tc["name"], args)
+                    if tc["name"] == "generate_image":
+                        yield {
+                            "type": sse_events.IMAGE_GENERATED,
+                            "url": result["url"],
+                            "prompt": result["prompt"],
+                            "path": result["path"],
+                        }
+                    yield tool_result_event(tc["name"], result)
                     current_input.append({
                         "type": "function_call_output",
                         "call_id": tc["call_id"],
-                        "output": result_text,
+                        "output": result.get("text", "Done."),
                     })
-                else:
-                    yield {"type": sse_events.TOOL_START, "name": tc["name"]}
-                    try:
-                        result = await _execute_tool(tc["name"], args)
-                        if tc["name"] == "generate_image":
-                            yield {
-                                "type": sse_events.IMAGE_GENERATED,
-                                "url": result["url"],
-                                "prompt": result["prompt"],
-                                "path": result["path"],
-                            }
-                        yield tool_result_event(tc["name"], result)
-                        current_input.append({
-                            "type": "function_call_output",
-                            "call_id": tc["call_id"],
-                            "output": result.get("text", "Done."),
-                        })
-                    except Exception as e:
-                        logger.exception("Tool %s failed", tc["name"])
-                        err = f"Tool error: {e}"
-                        yield {
-                            "type": sse_events.TOOL_RESULT,
-                            "name": tc["name"],
-                            "content": err,
-                            "error": err,
-                        }
-                        current_input.append({
-                            "type": "function_call_output",
-                            "call_id": tc["call_id"],
-                            "output": err,
-                        })
+                except Exception as e:
+                    logger.exception("Tool %s failed", tc["name"])
+                    err = f"Tool error: {e}"
+                    yield {
+                        "type": sse_events.TOOL_RESULT,
+                        "name": tc["name"],
+                        "content": err,
+                        "error": err,
+                    }
+                    current_input.append({
+                        "type": "function_call_output",
+                        "call_id": tc["call_id"],
+                        "output": err,
+                    })

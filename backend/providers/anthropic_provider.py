@@ -118,6 +118,19 @@ class AnthropicProvider:
                             }
                             if blk.type == "server_tool_use":
                                 yield {"type": sse_events.SEARCHING, "name": blk.name}
+                        elif blk.type == "server_tool_result":
+                            sources = [
+                                item.url
+                                for item in (getattr(blk, "content", None) or [])
+                                if getattr(item, "url", None)
+                            ]
+                            if sources:
+                                yield {
+                                    "type": sse_events.TOOL_RESULT,
+                                    "name": "web_search",
+                                    "content": "",
+                                    "sources": sources,
+                                }
                         if current_block is not None:
                             content_blocks.append(current_block)
 

@@ -144,7 +144,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
                 const calls = [...entry.toolCalls];
                 for (let i = calls.length - 1; i >= 0; i--) {
                   if (calls[i].name === event.name && !calls[i].done) {
-                    calls[i] = { ...calls[i], done: true, error: event.error };
+                    calls[i] = { ...calls[i], done: true, error: event.error, sources: event.sources };
                     break;
                   }
                 }

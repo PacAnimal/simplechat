@@ -74,7 +74,7 @@ export type StreamEvent =
   | { type: "text_delta"; content: string }
   | { type: "thinking_delta"; content: string }
   | { type: "tool_start"; name: string }
-  | { type: "tool_result"; name: string; content: string; error?: string }
+  | { type: "tool_result"; name: string; content: string; error?: string; sources?: string[] }
   | { type: "image_generated"; url: string; prompt: string }
   | { type: "searching"; name: string }
   | { type: "user_message_saved"; message_id: number }
@@ -86,6 +86,7 @@ export interface ToolCallRecord {
   name: string;
   done: boolean;
   error?: string;
+  sources?: string[];
 }
 
 export const PROVIDER_LABELS: Record<string, string> = {
