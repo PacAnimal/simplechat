@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   DatabaseIcon,
+  DownloadIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -16,6 +17,12 @@ import type { Dataset } from "../types";
 import { cn } from "../lib/utils";
 
 const DATASET_ACCEPT = ".txt,.md,.csv,.json,.pdf,.xls,.xlsx,.docx,.pptx";
+
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 export default function DatasetManager({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -165,6 +172,7 @@ export default function DatasetManager({ onClose }: { onClose: () => void }) {
             onDelete={() => deleteMut.mutate(ds.id)}
             onReindex={() => reindexMut.mutate(ds.id)}
             onDeleteFile={(fileId) => deleteFileMut.mutate({ datasetId: ds.id, fileId })}
+            onDownloadFile={(fileId, filename) => api.downloadDatasetFile(ds.id, fileId, filename)}
             uploading={uploadingFor === ds.id && uploadFileMut.isPending}
             reindexing={reindexMut.isPending}
           />
@@ -190,6 +198,7 @@ function DatasetCard({
   onDelete,
   onReindex,
   onDeleteFile,
+  onDownloadFile,
   uploading,
   reindexing,
 }: {
@@ -200,6 +209,7 @@ function DatasetCard({
   onDelete: () => void;
   onReindex: () => void;
   onDeleteFile: (fileId: number) => void;
+  onDownloadFile: (fileId: number, filename: string) => void;
   uploading: boolean;
   reindexing: boolean;
 }) {
@@ -227,33 +237,33 @@ function DatasetCard({
             onClick={onUpload}
             disabled={uploading}
             title="Upload file"
-            className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors disabled:opacity-40"
+            className="p-2 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors disabled:opacity-40"
           >
-            <UploadIcon size={13} />
+            <UploadIcon size={20} />
           </button>
           <button
             onClick={onReindex}
             disabled={reindexing}
             title="Reindex"
             className={cn(
-              "p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors disabled:opacity-40",
+              "p-2 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors disabled:opacity-40",
               reindexing && "animate-spin",
             )}
           >
-            <RefreshCwIcon size={13} />
+            <RefreshCwIcon size={20} />
           </button>
           {confirmDelete ? (
             <div className="flex items-center gap-1">
-              <span className="text-[0.65rem] text-muted">Delete?</span>
+              <span className="text-sm text-muted">Delete?</span>
               <button
                 onClick={onDelete}
-                className="text-[0.65rem] text-red-400 hover:text-red-300 font-medium px-1"
+                className="text-sm text-red-400 hover:text-red-300 font-medium px-2"
               >
                 Yes
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="text-[0.65rem] text-muted hover:text-primary font-medium px-1"
+                className="text-sm text-muted hover:text-primary font-medium px-2"
               >
                 No
               </button>
@@ -262,9 +272,9 @@ function DatasetCard({
             <button
               onClick={() => setConfirmDelete(true)}
               title="Delete dataset"
-              className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-red-400 transition-colors"
+              className="p-2 rounded-lg hover:bg-hover text-muted hover:text-red-400 transition-colors"
             >
-              <Trash2Icon size={13} />
+              <Trash2Icon size={20} />
             </button>
           )}
         </div>
@@ -279,15 +289,24 @@ function DatasetCard({
               <div key={f.id} className="flex items-center gap-2 py-1.5 group">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-primary truncate">{f.filename}</p>
-                  <p className="text-[0.7rem] text-muted">{formatBytes(f.size)}</p>
+                  <p className="text-[0.7rem] text-muted">{formatBytes(f.size)} · {fmtDate(f.created_at)}</p>
                 </div>
-                <button
-                  onClick={() => onDeleteFile(f.id)}
-                  title="Remove file"
-                  className="p-1 rounded hover:bg-hover text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2Icon size={12} />
-                </button>
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                  <button
+                    onClick={() => onDownloadFile(f.id, f.filename)}
+                    title="Download file"
+                    className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
+                  >
+                    <DownloadIcon size={20} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteFile(f.id)}
+                    title="Remove file"
+                    className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-red-400 transition-colors"
+                  >
+                    <Trash2Icon size={20} />
+                  </button>
+                </div>
               </div>
             ))
           )}

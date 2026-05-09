@@ -103,6 +103,19 @@ export const api = {
   reindexDataset: (id: number) => req<void>("POST", `/datasets/${id}/reindex`),
   deleteDatasetFile: (datasetId: number, fileId: number) =>
     req<void>("DELETE", `/datasets/${datasetId}/files/${fileId}`),
+  downloadDatasetFile: async (datasetId: number, fileId: number, filename: string): Promise<void> => {
+    const res = await fetch(`${BASE}/datasets/${datasetId}/files/${fileId}/download`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   uploadDatasetFile: async (datasetId: number, file: File): Promise<DatasetFile> => {
     const form = new FormData();
     form.append("file", file);

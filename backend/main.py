@@ -59,8 +59,9 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass  # startup continues; model cache pre-warmed on first request
     if settings.ollama_api_url:
-        from .rag.embedder import EMBED_MODEL, ensure_embed_model
         import asyncio
+
+        from .rag.embedder import EMBED_MODEL, ensure_embed_model
         asyncio.create_task(ensure_embed_model(settings.ollama_api_url, EMBED_MODEL))
     yield
 

@@ -3,6 +3,7 @@ import logging
 import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -150,7 +151,7 @@ async def delete_dataset_file(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    ds = await _get_owned_dataset(dataset_id, profile.id, db)
+    await _get_owned_dataset(dataset_id, profile.id, db)
 
     df = await db.get(DatasetFile, file_id)
     if not df or df.dataset_id != dataset_id:
@@ -170,6 +171,24 @@ async def delete_dataset_file(
         await asyncio.to_thread(delete_collection, dataset_id)
 
 
+@router.get("/{dataset_id}/files/{file_id}/download")
+async def download_dataset_file(
+    dataset_id: int,
+    file_id: int,
+    profile: Profile = Depends(get_current_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_owned_dataset(dataset_id, profile.id, db)
+    df = await db.get(DatasetFile, file_id)
+    if not df or df.dataset_id != dataset_id:
+        raise HTTPException(404, "File not found")
+    return Response(
+        content=df.content,
+        media_type=df.mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{df.filename}"'},
+    )
+
+
 @router.post("/{dataset_id}/reindex", status_code=204)
 async def reindex(
     dataset_id: int,
@@ -177,7 +196,7 @@ async def reindex(
     db: AsyncSession = Depends(get_db),
 ):
     base_url = _ollama_url()
-    ds = await _get_owned_dataset(dataset_id, profile.id, db)
+    await _get_owned_dataset(dataset_id, profile.id, db)
 
     result = await db.execute(
         select(DatasetFile).where(DatasetFile.dataset_id == dataset_id)

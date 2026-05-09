@@ -8,7 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..models import Attachment, Chat, Dataset, DatasetFile, GeneratedImage, Message, Profile
+from ..models import (
+    Attachment,
+    Chat,
+    Dataset,
+    DatasetFile,
+    GeneratedImage,
+    Message,
+    Profile,
+)
 
 router = APIRouter(prefix="/test", tags=["test"])
 

@@ -345,3 +345,179 @@ async def test_update_chat_rejects_foreign_dataset(unauthed_client: AsyncClient)
     assert patch_r.status_code == 404
 
     unauthed_client.auth = None
+
+
+# ---------------------------------------------------------------------------
+# File download
+# ---------------------------------------------------------------------------
+
+
+async def test_download_file_requires_auth(unauthed_client: AsyncClient):
+    r = await unauthed_client.get("/api/datasets/1/files/1/download")
+    assert r.status_code == 401
+
+
+async def test_download_file_success(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+        ds = await _create_dataset(client)
+        upload_r = await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("report.txt", b"hello world", "text/plain")},
+        )
+        assert upload_r.status_code == 200
+        file_id = upload_r.json()["id"]
+
+    dl_r = await client.get(f"/api/datasets/{ds['id']}/files/{file_id}/download")
+    assert dl_r.status_code == 200
+    assert dl_r.content == b"hello world"
+    assert dl_r.headers["content-type"].startswith("text/plain")
+    assert "report.txt" in dl_r.headers["content-disposition"]
+
+
+async def test_download_file_not_found(client: AsyncClient):
+    ds = await _create_dataset(client)
+    r = await client.get(f"/api/datasets/{ds['id']}/files/9999/download")
+    assert r.status_code == 404
+
+
+async def test_download_file_wrong_dataset(client: AsyncClient):
+    """File exists but belongs to a different dataset — must 404."""
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+        ds_a = await _create_dataset(client, "DSA")
+        ds_b = await _create_dataset(client, "DSB")
+        upload_r = await client.post(
+            f"/api/datasets/{ds_a['id']}/files",
+            files={"file": ("x.txt", b"data", "text/plain")},
+        )
+        file_id = upload_r.json()["id"]
+
+    r = await client.get(f"/api/datasets/{ds_b['id']}/files/{file_id}/download")
+    assert r.status_code == 404
+
+
+async def test_download_file_profile_isolation(unauthed_client: AsyncClient):
+    from tests.backend.conftest import BearerAuth, _register_and_login
+
+    _, token_a = await _register_and_login(unauthed_client, "alice4", "passWord1")
+    _, token_b = await _register_and_login(unauthed_client, "bob4", "passWord1")
+
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+
+        unauthed_client.auth = BearerAuth(token_a)
+        r = await unauthed_client.post("/api/datasets", json={"name": "Alice DS"})
+        ds_id = r.json()["id"]
+        upload_r = await unauthed_client.post(
+            f"/api/datasets/{ds_id}/files",
+            files={"file": ("secret.txt", b"secret", "text/plain")},
+        )
+        file_id = upload_r.json()["id"]
+
+    unauthed_client.auth = BearerAuth(token_b)
+    r2 = await unauthed_client.get(f"/api/datasets/{ds_id}/files/{file_id}/download")
+    assert r2.status_code == 404
+
+    unauthed_client.auth = None
+
+
+# ---------------------------------------------------------------------------
+# created_at in file metadata
+# ---------------------------------------------------------------------------
+
+
+async def test_upload_response_includes_created_at(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+        ds = await _create_dataset(client)
+        r = await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("dated.txt", b"data", "text/plain")},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "created_at" in data
+    assert data["created_at"] is not None
+
+
+async def test_list_files_include_created_at(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+        ds = await _create_dataset(client)
+        await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("dated2.txt", b"data", "text/plain")},
+        )
+
+    r = await client.get(f"/api/datasets/{ds['id']}")
+    assert r.status_code == 200
+    file_meta = r.json()["files"][0]
+    assert "created_at" in file_meta
+    assert file_meta["created_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Delete file triggers reindex with remaining files
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_file_reindexes_remaining_files(client: AsyncClient):
+    """After deleting one file, reindex_dataset is called with the remaining files."""
+    from backend.rag.indexer import reindex_dataset
+
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 1
+        ds = await _create_dataset(client)
+        r1 = await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("keep.txt", b"keep this", "text/plain")},
+        )
+        r2 = await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("delete_me.txt", b"delete this", "text/plain")},
+        )
+        file_to_keep = r1.json()["id"]
+        file_to_delete = r2.json()["id"]
+
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = None
+
+        del_r = await client.delete(f"/api/datasets/{ds['id']}/files/{file_to_delete}")
+        assert del_r.status_code == 204
+
+        # reindex_dataset should have been called
+        mock_thread.assert_called_once()
+        fn, *args = mock_thread.call_args[0]
+        assert fn is reindex_dataset
+        remaining_ids = [f.id for f in args[1]]
+        assert file_to_keep in remaining_ids
+        assert file_to_delete not in remaining_ids

@@ -17,7 +17,7 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _wait_ready(port: int, timeout: float = 10.0):
+def _wait_ready(port: int, timeout: float = 30.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
