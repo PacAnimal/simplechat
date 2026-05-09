@@ -1,6 +1,6 @@
 # SimpleChat
 
-A clean, self-hosted AI chat interface supporting both OpenAI and Anthropic models. Multi-profile with per-profile chat history, file attachments, image generation, and web search.
+A self-hosted, privacy-first AI chat platform — one Docker image, your API keys, no data sent anywhere else. Use OpenAI and Anthropic cloud models, or connect a local [Ollama](https://ollama.com) instance to keep everything completely on-premise with no cloud calls at all.
 
 ![Profile selection](docs/screenshot-profiles.png)
 
@@ -10,20 +10,24 @@ A clean, self-hosted AI chat interface supporting both OpenAI and Anthropic mode
 
 ## Features
 
-- **Multi-provider** — switch between OpenAI (GPT-4o, o3, etc.) and Anthropic (Claude Sonnet, Opus, Haiku) per chat
-- **Multi-profile** — multiple named profiles, each with their own chat history and settings
+- **Multi-provider** — switch between OpenAI (GPT-4o, o3, o3-pro, etc.), Anthropic (Claude Sonnet, Opus, Haiku), and self-hosted Ollama models per chat
+- **Fully local mode** — point at a local Ollama instance and no data ever leaves your machine
+- **Multi-profile** — multiple named profiles, each with their own isolated chat history and settings
+- **Knowledge datasets (RAG)** — upload documents (PDF, Word, Excel, PowerPoint, CSV, text) and attach them to chats; the model retrieves relevant context automatically using Ollama embeddings
 - **Streaming responses** — real-time token-by-token output via SSE
-- **Tool use** — image generation (DALL-E / gpt-image-2) and web search
-- **Extended thinking** — renders Claude's thinking blocks in a collapsible UI
-- **File attachments** — attach text, JSON, CSV, and Markdown files to messages
+- **Tool use** — image generation (DALL-E / gpt-image-2), web search, and a safe math calculator
+- **Extended thinking** — renders Claude's reasoning/thinking blocks in a collapsible UI
+- **File attachments** — attach text, JSON, CSV, Markdown, and PDF files directly to messages
 - **Markdown rendering** — syntax-highlighted code blocks and full Markdown support
-- **Self-contained** — single Docker image, SQLite database, no external dependencies
+- **Self-contained** — single Docker image, SQLite database, no external services required
 
 ---
 
 ## Quickstart — Docker (recommended)
 
 The easiest way to run SimpleChat is to pull the pre-built image from GitHub Container Registry.
+
+**Cloud providers (OpenAI + Anthropic):**
 
 ```bash
 docker run -d \
@@ -35,11 +39,22 @@ docker run -d \
   ghcr.io/pacanimal/simplechat:latest
 ```
 
+**Fully local with Ollama (no cloud calls):**
+
+```bash
+docker run -d \
+  --name simplechat \
+  -p 8080:8080 \
+  -v simplechat-data:/data \
+  -e OLLAMA_API_URL=http://host.docker.internal:11434 \
+  ghcr.io/pacanimal/simplechat:latest
+```
+
+You can mix and match — set any combination of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `OLLAMA_API_URL`. Providers with no key/URL configured are simply hidden from the model list.
+
 Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
 Data (database, uploads, generated images) is stored in the `simplechat-data` Docker volume and persists across container restarts.
-
-> You only need the keys for the providers you want to use. Omit `ANTHROPIC_API_KEY` if you only want OpenAI, for example.
 
 ---
 
@@ -68,6 +83,7 @@ The Dockerfile is a two-stage build: the first stage compiles the React frontend
 |---|---|---|
 | `OPENAI_API_KEY` | — | OpenAI API key. Required for OpenAI models and image generation. |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key. Required for Claude models. |
+| `OLLAMA_API_URL` | — | Base URL of a local Ollama instance (e.g. `http://host.docker.internal:11434`). When set, Ollama models appear in the model list. No cloud calls are made for Ollama chats. |
 | `DATABASE_URL` | `sqlite+aiosqlite:////data/data/simplechat.db` | SQLite database URL. |
 | `UPLOADS_DIR` | `/data/uploads` | Directory for user file attachments. |
 | `GENERATED_DIR` | `/data/generated` | Directory for AI-generated images. |
@@ -99,6 +115,16 @@ All persistent data lives under a single directory, `/data` inside the container
 ```
 
 To back up everything, snapshot or copy the mounted volume. To start fresh, delete or replace it.
+
+---
+
+## Knowledge datasets (RAG)
+
+SimpleChat supports retrieval-augmented generation (RAG) through named datasets. Upload documents once, then attach a dataset to any chat — the relevant passages are automatically retrieved and injected into the model's context.
+
+Supported document types: PDF, Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), CSV, plain text, and Markdown.
+
+Embeddings are generated locally via Ollama (`nomic-embed-text` model), so document content never leaves your server. A running Ollama instance is required to index and query datasets.
 
 ---
 

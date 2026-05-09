@@ -48,7 +48,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
 
   const availableProviders = ALL_PROVIDERS.filter((p) => {
     const m = modelsFor(p);
-    return m === null || m.length > 0; // null = loading, show optimistically
+    return m !== null && m.length > 0;
   });
 
   // when live data arrives, switch away from any now-unavailable provider
@@ -147,9 +147,11 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="w-full appearance-none bg-input border border-border rounded-xl px-4 py-2.5 text-sm text-primary focus:outline-none focus:border-accent cursor-pointer pr-8"
+                disabled={!remoteModels}
+                className="w-full appearance-none bg-input border border-border rounded-xl px-4 py-2.5 text-sm text-primary focus:outline-none focus:border-accent cursor-pointer pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="model-select"
               >
+                {!remoteModels && <option value="">Loading…</option>}
                 {options.map((m) => (
                   <option key={m.value} value={m.value} className="bg-elevated">
                     {m.label}

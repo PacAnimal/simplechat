@@ -31,8 +31,7 @@ function ModelSwitcher({ chatId, provider, model, disabled }: {
   });
 
   const modelsFor = (p: string) => {
-    const live = remoteModels?.[p];
-    if (live?.length) return live.map((m) => ({ label: m.label, value: m.id }));
+    if (remoteModels) return (remoteModels[p] ?? []).map((m) => ({ label: m.label, value: m.id }));
     return (MODELS as Record<string, { label: string; value: string }[]>)[p] ?? [];
   };
 
