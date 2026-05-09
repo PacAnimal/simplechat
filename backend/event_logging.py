@@ -25,13 +25,15 @@ def log_event(profile: str | None, action: str, **fields):
     logger.info("event %s %s%s", who, action, f" {detail}" if detail else "")
 
 
-def audit_message(profile: str, chat_id: int, content: str) -> None:
+def audit_message(profile: str, chat_id: int, content: str, provider: str | None = None, model: str | None = None) -> None:
     if _audit_logger is None:
         return
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "user": profile,
         "chat_id": chat_id,
+        "provider": provider,
+        "model": model,
         "message": content,
     }
     _audit_logger.info(json.dumps(entry, ensure_ascii=False))

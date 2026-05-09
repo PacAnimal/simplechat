@@ -510,7 +510,7 @@ async def send_message(
 
     log_event(profile.name, "send_message", chat_id=chat_id)
     if settings.audit_log:
-        audit_message(profile.name, chat_id, body.content)
+        audit_message(profile.name, chat_id, body.content, provider=chat.provider, model=chat.model)
 
     return StreamingResponse(
         _event_stream(
