@@ -21,7 +21,7 @@ async def test_stream_openai_message(client: AsyncClient):
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "Hello "}
         yield {"type": "text_delta", "content": "world!"}
 
@@ -71,7 +71,7 @@ async def test_stream_saves_messages(client: AsyncClient):
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "The answer is 42."}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -98,7 +98,7 @@ async def test_stream_auto_titles_chat(client: AsyncClient):
     chat_id = create.json()["id"]
     assert create.json()["title"] == "New Chat"
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "Sure!"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -130,7 +130,7 @@ async def test_stream_image_generation(client: AsyncClient):
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "tool_start", "name": "generate_image"}
         yield {
             "type": "image_generated",
@@ -162,7 +162,7 @@ async def test_stream_updates_chat_updated_at(client: AsyncClient):
     chat_id = create.json()["id"]
     before = create.json()["updated_at"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "ok"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -186,7 +186,7 @@ async def test_auto_title_does_not_fire_when_explicit_title_given(client: AsyncC
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "ok"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -210,7 +210,7 @@ async def test_auto_title_does_not_fire_after_patch_title(client: AsyncClient):
     chat_id = create.json()["id"]
     await client.patch(f"/api/chats/{chat_id}", json={"title": "Custom Title"})
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "ok"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -233,7 +233,7 @@ async def test_auto_title_fires_only_once(client: AsyncClient):
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {"type": "text_delta", "content": "ok"}
 
     with patch("backend.providers.openai_provider.OpenAIProvider._stream", mock_stream):
@@ -260,7 +260,7 @@ async def test_stream_error_event_on_provider_failure(client: AsyncClient):
     )
     chat_id = create.json()["id"]
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         raise RuntimeError("provider exploded")
         yield  # make it a generator
 

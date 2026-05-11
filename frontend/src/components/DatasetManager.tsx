@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircleIcon,
+  CheckCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   DatabaseIcon,
   DownloadIcon,
+  LoaderIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -190,6 +193,34 @@ export default function DatasetManager({ onClose }: { onClose: () => void }) {
   );
 }
 
+function IndexStatusBadge({ status, chunks }: { status: Dataset["index_status"]; chunks: number }) {
+  if (status === "indexing") {
+    return (
+      <span className="flex items-center gap-1 text-[0.65rem] text-accent" title="Indexing…">
+        <LoaderIcon size={11} className="animate-spin" />
+        indexing
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="flex items-center gap-1 text-[0.65rem] text-red-400" title="Indexing failed — try reindexing">
+        <AlertCircleIcon size={11} />
+        failed
+      </span>
+    );
+  }
+  if (chunks > 0) {
+    return (
+      <span className="flex items-center gap-1 text-[0.65rem] text-green-400" title={`${chunks} chunks indexed`}>
+        <CheckCircleIcon size={11} />
+        {chunks} chunks
+      </span>
+    );
+  }
+  return null;
+}
+
 function DatasetCard({
   dataset,
   expanded,
@@ -226,9 +257,12 @@ function DatasetCard({
           )}
           <div className="min-w-0">
             <p className="text-sm font-medium text-primary truncate">{dataset.name}</p>
-            <p className="text-[0.7rem] text-muted">
-              {dataset.files.length} file{dataset.files.length !== 1 ? "s" : ""}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[0.7rem] text-muted">
+                {dataset.files.length} file{dataset.files.length !== 1 ? "s" : ""}
+              </p>
+              <IndexStatusBadge status={dataset.index_status} chunks={dataset.indexed_chunks} />
+            </div>
           </div>
         </button>
 

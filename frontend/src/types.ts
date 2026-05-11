@@ -30,6 +30,8 @@ export interface Dataset {
   id: number;
   name: string;
   created_at: string;
+  index_status: "ready" | "indexing" | "failed";
+  indexed_chunks: number;
   files: DatasetFile[];
 }
 

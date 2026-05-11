@@ -482,6 +482,86 @@ async def test_list_files_include_created_at(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Index status tracking
+# ---------------------------------------------------------------------------
+
+
+async def test_created_dataset_has_default_status(client: AsyncClient):
+    ds = await _create_dataset(client, "StatusTest")
+    assert ds["index_status"] == "ready"
+    assert ds["indexed_chunks"] == 0
+
+
+async def test_upload_success_sets_status_ready(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 7
+        ds = await _create_dataset(client)
+        await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("notes.txt", b"some notes", "text/plain")},
+        )
+
+    r = await client.get(f"/api/datasets/{ds['id']}")
+    data = r.json()
+    assert data["index_status"] == "ready"
+    assert data["indexed_chunks"] == 7
+
+
+async def test_upload_failure_sets_status_failed(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.side_effect = RuntimeError("ollama down")
+        ds = await _create_dataset(client)
+        r = await client.post(
+            f"/api/datasets/{ds['id']}/files",
+            files={"file": ("fail.txt", b"content", "text/plain")},
+        )
+        assert r.status_code == 200  # file still saved
+
+    ds_r = await client.get(f"/api/datasets/{ds['id']}")
+    assert ds_r.json()["index_status"] == "failed"
+
+
+async def test_reindex_success_sets_status_and_chunks(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.return_value = 12
+        ds = await _create_dataset(client)
+        r = await client.post(f"/api/datasets/{ds['id']}/reindex")
+        assert r.status_code == 204
+
+    ds_r = await client.get(f"/api/datasets/{ds['id']}")
+    data = ds_r.json()
+    assert data["index_status"] == "ready"
+    assert data["indexed_chunks"] == 12
+
+
+async def test_reindex_failure_sets_status_failed(client: AsyncClient):
+    with (
+        patch("backend.api.datasets.settings") as mock_settings,
+        patch("backend.api.datasets.asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+    ):
+        mock_settings.ollama_api_url = "http://mock-ollama"
+        mock_thread.side_effect = RuntimeError("embed model missing")
+        ds = await _create_dataset(client)
+        r = await client.post(f"/api/datasets/{ds['id']}/reindex")
+        assert r.status_code == 204  # endpoint returns 204 regardless
+
+    ds_r = await client.get(f"/api/datasets/{ds['id']}")
+    assert ds_r.json()["index_status"] == "failed"
+
+
 async def test_delete_file_reindexes_remaining_files(client: AsyncClient):
     """After deleting one file, reindex_dataset is called with the remaining files."""
     from backend.rag.indexer import reindex_dataset

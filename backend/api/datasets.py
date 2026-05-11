@@ -37,6 +37,13 @@ def _ollama_url() -> str:
     return url
 
 
+async def _set_status(ds: Dataset, status: str, db: AsyncSession, chunks: int | None = None) -> None:
+    ds.index_status = status
+    if chunks is not None:
+        ds.indexed_chunks = chunks
+    await db.commit()
+
+
 @router.get("", response_model=list[DatasetRead])
 async def list_datasets(
     profile: Profile = Depends(get_current_profile),
@@ -130,16 +137,19 @@ async def upload_dataset_file(
     await db.commit()
     await db.refresh(df)
 
+    await _set_status(ds, "indexing", db)
     try:
         chunk_count = await asyncio.to_thread(
             index_file, dataset_id, df.id, safe_name, content, mime, base_url, EMBED_MODEL
         )
         logger.info("upload: indexed %d chunks for %s in dataset %d", chunk_count, safe_name, dataset_id)
+        await _set_status(ds, "ready", db, ds.indexed_chunks + chunk_count)
     except Exception:
         logger.warning(
             "upload: indexing failed for %s in dataset %d — file saved, collection not updated",
             safe_name, dataset_id, exc_info=True,
         )
+        await _set_status(ds, "failed", db)
 
     return df
 
@@ -151,7 +161,7 @@ async def delete_dataset_file(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    await _get_owned_dataset(dataset_id, profile.id, db)
+    ds = await _get_owned_dataset(dataset_id, profile.id, db)
 
     df = await db.get(DatasetFile, file_id)
     if not df or df.dataset_id != dataset_id:
@@ -161,14 +171,21 @@ async def delete_dataset_file(
     await db.commit()
 
     base_url = settings.ollama_api_url
-    if base_url:
-        result = await db.execute(
-            select(DatasetFile).where(DatasetFile.dataset_id == dataset_id)
-        )
-        remaining = result.scalars().all()
-        await asyncio.to_thread(reindex_dataset, dataset_id, remaining, base_url, EMBED_MODEL)
-    else:
-        await asyncio.to_thread(delete_collection, dataset_id)
+    await _set_status(ds, "indexing", db)
+    try:
+        if base_url:
+            result = await db.execute(
+                select(DatasetFile).where(DatasetFile.dataset_id == dataset_id)
+            )
+            remaining = result.scalars().all()
+            total = await asyncio.to_thread(reindex_dataset, dataset_id, remaining, base_url, EMBED_MODEL)
+            await _set_status(ds, "ready", db, total)
+        else:
+            await asyncio.to_thread(delete_collection, dataset_id)
+            await _set_status(ds, "ready", db, 0)
+    except Exception:
+        logger.warning("delete_file: reindex failed for dataset %d", dataset_id, exc_info=True)
+        await _set_status(ds, "failed", db)
 
 
 @router.get("/{dataset_id}/files/{file_id}/download")
@@ -196,10 +213,17 @@ async def reindex(
     db: AsyncSession = Depends(get_db),
 ):
     base_url = _ollama_url()
-    await _get_owned_dataset(dataset_id, profile.id, db)
+    ds = await _get_owned_dataset(dataset_id, profile.id, db)
 
     result = await db.execute(
         select(DatasetFile).where(DatasetFile.dataset_id == dataset_id)
     )
     files = result.scalars().all()
-    await asyncio.to_thread(reindex_dataset, dataset_id, files, base_url, EMBED_MODEL)
+
+    await _set_status(ds, "indexing", db)
+    try:
+        total = await asyncio.to_thread(reindex_dataset, dataset_id, files, base_url, EMBED_MODEL)
+        await _set_status(ds, "ready", db, total)
+    except Exception:
+        logger.warning("reindex: failed for dataset %d", dataset_id, exc_info=True)
+        await _set_status(ds, "failed", db)

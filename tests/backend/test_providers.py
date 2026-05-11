@@ -32,7 +32,7 @@ async def test_openai_stream_text():
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
         events = []
         async for event in provider._stream(
-            [{"role": "user", "content": "Hi"}], "gpt-4o", False
+            [{"role": "user", "content": "Hi"}], "gpt-4o"
         ):
             events.append(event)
 
@@ -56,7 +56,7 @@ async def test_openai_stream_no_choices():
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
         events = []
         async for event in provider._stream(
-            [{"role": "user", "content": "Hi"}], "gpt-4o", False
+            [{"role": "user", "content": "Hi"}], "gpt-4o"
         ):
             events.append(event)
 
@@ -114,7 +114,7 @@ async def test_openai_stream_image_tool():
     ):
         events = []
         async for event in provider._stream(
-            [{"role": "user", "content": "Draw a cat"}], "gpt-4o", False
+            [{"role": "user", "content": "Draw a cat"}], "gpt-4o"
         ):
             events.append(event)
 
@@ -327,7 +327,7 @@ async def test_openai_stream_max_iterations_guard():
     ):
         events = []
         async for event in provider._stream(
-            [{"role": "user", "content": "Loop"}], "gpt-4o", False
+            [{"role": "user", "content": "Loop"}], "gpt-4o"
         ):
             events.append(event)
 

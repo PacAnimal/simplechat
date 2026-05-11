@@ -158,7 +158,7 @@ async def test_generated_image_ownership_enforced(
         )  # resolve symlinks (/tmp → /private/tmp on macOS)
     filename = os.path.basename(img_path)
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         yield {
             "type": "image_generated",
             "url": f"/api/generated/{filename}",

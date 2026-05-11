@@ -63,6 +63,8 @@ class Dataset(Base):
     profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
     name = Column(String(255), nullable=False)
     created_at = Column(UTCDateTime, default=utcnow)
+    index_status = Column(String(20), nullable=False, default="ready", server_default="ready")
+    indexed_chunks = Column(Integer, nullable=False, default=0, server_default="0")
 
     profile = relationship("Profile", back_populates="datasets")
     files = relationship("DatasetFile", back_populates="dataset", cascade="all, delete-orphan")

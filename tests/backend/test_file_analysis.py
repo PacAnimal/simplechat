@@ -156,7 +156,7 @@ async def test_stream_openai_receives_csv_content(client: AsyncClient):
 
     captured: list[dict] = []
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "Widget B."}
 
@@ -227,7 +227,7 @@ async def test_stream_json_file_content_in_context(client: AsyncClient):
 
     captured: list[dict] = []
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "prod-01"}
 
@@ -259,7 +259,7 @@ async def test_stream_multiple_attachments_all_in_context(client: AsyncClient):
 
     captured: list[dict] = []
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "Oslo is the capital."}
 
@@ -291,7 +291,7 @@ async def test_stream_attachment_content_absent_without_attachment_ids(
 
     captured: list[dict] = []
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "I don't know."}
 
@@ -317,7 +317,7 @@ async def test_stream_text_file_persists_across_turns(client: AsyncClient):
     att_id = await _upload(client, chat_id, "notes.txt", notes_bytes, "text/plain")
 
     # first turn: send with attachment
-    async def mock_stream_1(self, messages, model, web_search):
+    async def mock_stream_1(self, messages, model):
         yield {"type": "text_delta", "content": "Got it."}
 
     with patch(
@@ -334,7 +334,7 @@ async def test_stream_text_file_persists_across_turns(client: AsyncClient):
     # second turn: no attachment — but history should still contain the file content
     captured: list[dict] = []
 
-    async def mock_stream_2(self, messages, model, web_search):
+    async def mock_stream_2(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "$1,200,000"}
 
@@ -384,7 +384,7 @@ async def test_large_xls_openai_full_content_in_context(client: AsyncClient):
 
     captured: list[dict] = []
 
-    async def mock_stream(self, messages, model, web_search):
+    async def mock_stream(self, messages, model):
         captured.extend(messages)
         yield {"type": "text_delta", "content": "Rasheeda / Male"}
 

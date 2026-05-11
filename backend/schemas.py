@@ -28,6 +28,8 @@ class DatasetRead(BaseModel):
     id: int
     name: str
     created_at: datetime
+    index_status: str = "ready"
+    indexed_chunks: int = 0
     files: list[DatasetFileMeta] = []
 
     model_config = {"from_attributes": True}

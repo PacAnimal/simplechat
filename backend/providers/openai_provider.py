@@ -132,15 +132,15 @@ class OpenAIProvider:
 
         while True:
             iteration += 1
-            exceeded = iteration > MAX_TOOL_ITERATIONS
-            if exceeded:
-                logger.warning("Tool loop hit max iterations (%d) for model %s — forcing final response", MAX_TOOL_ITERATIONS, model)
+            if iteration > MAX_TOOL_ITERATIONS:
+                logger.warning("Tool loop hit max iterations (%d) for model %s — stopping", MAX_TOOL_ITERATIONS, model)
+                from .. import sse_events as _sse
+                yield {"type": _sse.ERROR, "message": f"Tool loop reached maximum iterations ({MAX_TOOL_ITERATIONS}) — stopping to prevent an infinite loop"}
+                return
 
             tool_call_accum: dict[int, dict] = {}
 
-            create_kwargs: dict = dict(model=model, messages=current_messages, stream=True)
-            if not exceeded:
-                create_kwargs["tools"] = tools
+            create_kwargs: dict = dict(model=model, messages=current_messages, stream=True, tools=tools)
             stream = await self.client.chat.completions.create(**create_kwargs)  # type: ignore
 
             async for chunk in stream:
@@ -167,7 +167,7 @@ class OpenAIProvider:
                         if tc.function and tc.function.arguments:
                             tool_call_accum[idx]["arguments"] += tc.function.arguments
 
-            if not tool_call_accum or exceeded:
+            if not tool_call_accum:
                 break
 
             assistant_tool_calls = [

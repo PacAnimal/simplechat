@@ -242,7 +242,7 @@ async def test_openai_calculator_tool_call():
     ):
         events = []
         async for event in provider._stream(
-            [{"role": "user", "content": "What is sqrt(144)?"}], "gpt-4o", False
+            [{"role": "user", "content": "What is sqrt(144)?"}], "gpt-4o"
         ):
             events.append(event)
 
@@ -275,7 +275,7 @@ async def test_openai_calculator_tool_definition_included():
     provider = OpenAIProvider()
     with patch.object(provider.client.chat.completions, "create", new=fake_create):
         async for _ in provider._stream(
-            [{"role": "user", "content": "hi"}], "gpt-4o", False
+            [{"role": "user", "content": "hi"}], "gpt-4o"
         ):
             pass
 
