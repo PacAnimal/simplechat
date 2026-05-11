@@ -132,12 +132,7 @@ def query_collection(
             seen_hashes.add(h)
             unique_scored.append((score, doc_id))
 
-    # over-fetch candidates so reranker has enough material to work with
-    pre_rerank = [id_to_text[doc_id] for _, doc_id in unique_scored[: n_results * 3] if doc_id in id_to_text]
-
-    # cross-encoder reranking — reorders candidates by direct query-document relevance scoring
-    from .reranker import rerank
-    docs = rerank(query_text, pre_rerank, top_n=n_results)
+    docs = [id_to_text[doc_id] for _, doc_id in unique_scored[:n_results] if doc_id in id_to_text]
 
     logger.info("RAG query: returned %d/%d chunk(s) above threshold %.2f", len(docs), len(candidates), _MIN_SCORE)
     if docs:
