@@ -7,16 +7,22 @@ logger = logging.getLogger("simplechat.rag.embedder")
 
 EMBED_MODEL = "nomic-embed-text"
 
+# nomic-embed-text instruction prefixes — improves retrieval quality significantly
+DOCUMENT_PREFIX = "search_document: "
+QUERY_PREFIX = "search_query: "
+
 
 class OllamaEmbeddingFunction(EmbeddingFunction):
-    def __init__(self, base_url: str, model: str = EMBED_MODEL):
+    def __init__(self, base_url: str, model: str = EMBED_MODEL, prefix: str = ""):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.prefix = prefix
 
     def __call__(self, input: Documents) -> Embeddings:
+        texts = [self.prefix + t for t in input] if self.prefix else list(input)
         resp = httpx.post(
             f"{self.base_url}/api/embed",
-            json={"model": self.model, "input": list(input)},
+            json={"model": self.model, "input": texts},
             timeout=120.0,
         )
         resp.raise_for_status()

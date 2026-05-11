@@ -370,6 +370,51 @@ async def _summarize_history(
     return recent
 
 
+async def _reformulate_rag_query(
+    history: list[dict], user_query: str, ollama_url: str, model: str
+) -> str:
+    """Rewrite user query as a standalone retrieval-optimised search string.
+
+    Resolves pronouns and follow-up references using the conversation history so
+    queries like "expand on the second point" actually retrieve something useful.
+    Falls back to the original query on any error.
+    """
+    if not history:
+        return user_query
+    history_text = "\n".join(
+        f"{m['role'].capitalize()}: {str(m.get('content', ''))[:300]}"
+        for m in history[-4:]
+        if isinstance(m.get("content"), str)
+    )
+    prompt = (
+        f"Conversation so far:\n{history_text}\n\n"
+        f"Latest user message: {user_query}\n\n"
+        "Rewrite the latest user message as a concise, standalone search query for a "
+        "document retrieval system. Resolve any pronouns or references using the "
+        "conversation context. Return only the rewritten query, nothing else."
+    )
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key="ollama", base_url=ollama_url.rstrip("/") + "/v1")
+        resp = await client.chat.completions.create(
+            model=model,
+            max_tokens=80,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": "You are a search query optimizer."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        reformulated = (resp.choices[0].message.content or "").strip()
+        if reformulated:
+            logger.info("RAG: reformulated query %r → %r", user_query[:80], reformulated[:80])
+            return reformulated
+    except Exception:
+        logger.debug("RAG: query reformulation failed, using original", exc_info=True)
+    return user_query
+
+
 async def _event_stream(
     chat: Chat,
     user_content: str,
@@ -405,12 +450,10 @@ async def _event_stream(
                     from ..rag.embedder import EMBED_MODEL, OllamaEmbeddingFunction
                     from ..rag.store import query_collection
                     embed_fn = OllamaEmbeddingFunction(settings.ollama_api_url, EMBED_MODEL)
-                    # history-aware query: include recent turns so follow-up questions resolve correctly
-                    history_query = " ".join(
-                        str(m["content"])[:300]
-                        for m in messages[-5:]
-                        if isinstance(m.get("content"), str)
-                    ).strip() or user_content
+                    # reformulate query using conversation history to resolve references and pronouns
+                    history_query = await _reformulate_rag_query(
+                        messages[:-1], user_content, settings.ollama_api_url, real_model
+                    )
                     logger.info(
                         "RAG: chat=%d dataset=%d(%r) query=%r",
                         chat.id, chat.dataset_id, dataset.name, history_query[:120],

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 
-from .embedder import OllamaEmbeddingFunction
+from .embedder import DOCUMENT_PREFIX, OllamaEmbeddingFunction
 from .store import delete_collection, get_or_create_collection
 
 logger = logging.getLogger("simplechat.rag.indexer")
@@ -202,7 +202,7 @@ def index_file(
         logger.warning("index_file: chunking produced 0 chunks for %s (%d chars)", filename, len(text))
         return 0
     logger.info("index_file: %s → %d chars → %d chunks (dataset=%d model=%s)", filename, len(text), len(chunks), dataset_id, model)
-    embed_fn = OllamaEmbeddingFunction(base_url, model)
+    embed_fn = OllamaEmbeddingFunction(base_url, model, prefix=DOCUMENT_PREFIX)
     col = get_or_create_collection(dataset_id, embed_fn)
     ids = [f"f{file_id}_c{i}" for i in range(len(chunks))]
     metadatas = [{"file_id": file_id, "filename": filename, "chunk": i} for i in range(len(chunks))]

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 
 import chromadb
 from chromadb import EmbeddingFunction
+
+from .embedder import QUERY_PREFIX, OllamaEmbeddingFunction
 
 logger = logging.getLogger("simplechat.rag.store")
 _client: chromadb.ClientAPI | None = None
@@ -78,13 +81,25 @@ def query_collection(
     max_bm25 = float(max(raw_bm25)) if any(s > 0 for s in raw_bm25) else 1.0
     bm25_by_id = {doc_id: float(score) / max_bm25 for doc_id, score in zip(all_ids, raw_bm25)}
 
-    # semantic scores via ChromaDB — fetch enough candidates to cover BM25 boosting
-    n_semantic = min(max(n_results * 4, 20), count)
-    sem_results = col.query(
-        query_texts=[query_text],
-        n_results=n_semantic,
-        include=["documents", "distances"],
-    )
+    # embed query with instruction prefix; use pre-computed embedding to avoid ChromaDB using the
+    # document-prefixed embed_fn stored on the collection
+    if isinstance(embed_fn, OllamaEmbeddingFunction):
+        qfn = OllamaEmbeddingFunction(embed_fn.base_url, embed_fn.model, prefix=QUERY_PREFIX)
+        query_emb = qfn([query_text])[0]
+        n_semantic = min(max(n_results * 4, 20), count)
+        sem_results = col.query(
+            query_embeddings=[query_emb],
+            n_results=n_semantic,
+            include=["documents", "distances"],
+        )
+    else:
+        n_semantic = min(max(n_results * 4, 20), count)
+        sem_results = col.query(
+            query_texts=[query_text],
+            n_results=n_semantic,
+            include=["documents", "distances"],
+        )
+
     sem_ids: list[str] = sem_results["ids"][0]
     sem_distances: list[float] = sem_results["distances"][0]
     # cosine space: distance = 1 - cosine_similarity, so similarity = 1 - distance
@@ -106,7 +121,23 @@ def query_collection(
             scored.append((combined, doc_id))
 
     scored.sort(reverse=True)
-    docs = [id_to_text[doc_id] for _, doc_id in scored[:n_results] if doc_id in id_to_text]
+
+    # deduplicate by content hash — keeps highest-scoring copy when identical text appears in multiple files
+    seen_hashes: set[str] = set()
+    unique_scored: list[tuple[float, str]] = []
+    for score, doc_id in scored:
+        text = id_to_text.get(doc_id, "")
+        h = hashlib.sha256(text.encode()).hexdigest()
+        if h not in seen_hashes:
+            seen_hashes.add(h)
+            unique_scored.append((score, doc_id))
+
+    # over-fetch candidates so reranker has enough material to work with
+    pre_rerank = [id_to_text[doc_id] for _, doc_id in unique_scored[: n_results * 3] if doc_id in id_to_text]
+
+    # cross-encoder reranking — reorders candidates by direct query-document relevance scoring
+    from .reranker import rerank
+    docs = rerank(query_text, pre_rerank, top_n=n_results)
 
     logger.info("RAG query: returned %d/%d chunk(s) above threshold %.2f", len(docs), len(candidates), _MIN_SCORE)
     if docs:
