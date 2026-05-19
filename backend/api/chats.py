@@ -188,13 +188,14 @@ async def delete_chat(
     img_result = await db.execute(
         select(GeneratedImage.path).where(GeneratedImage.chat_id == chat.id)
     )
-    file_paths = [r[0] for r in att_result.all()] + [r[0] for r in img_result.all()]
+    att_paths = [os.path.join(settings.uploads_dir, r[0]) for r in att_result.all()]
+    img_paths = [os.path.join(settings.generated_dir, r[0]) for r in img_result.all()]
 
     await db.delete(chat)
     await db.commit()
 
     log_event(profile.name, "delete_chat", chat_id=chat_id)
-    for path in file_paths:
+    for path in att_paths + img_paths:
         try:
             os.remove(path)
         except OSError:

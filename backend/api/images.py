@@ -35,16 +35,15 @@ async def serve_generated_image(
     except (PyJWTError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    full_path = os.path.realpath(os.path.join(settings.generated_dir, filename))
-    gen_dir = os.path.realpath(settings.generated_dir)
-    if not full_path.startswith(gen_dir + os.sep) or not os.path.exists(full_path):
+    full_path = os.path.join(settings.generated_dir, filename)
+    if not os.path.exists(full_path):
         raise HTTPException(404)
 
     result = await db.execute(
         select(GeneratedImage)
         .join(Chat, Chat.id == GeneratedImage.chat_id)
         .where(
-            GeneratedImage.path == full_path,
+            GeneratedImage.path == filename,
             Chat.profile_id == profile_id,
             Chat.discarded_at.is_(None),
         )
@@ -52,4 +51,4 @@ async def serve_generated_image(
     if not result.scalar_one_or_none():
         raise HTTPException(404)
 
-    return FileResponse(full_path)
+    return FileResponse(os.path.realpath(full_path))

@@ -129,7 +129,7 @@ async def upload_file(
         chat_id=chat_id,
         filename=safe_filename or filename,
         mime_type=mime,
-        path=dest,
+        path=filename,
         size=len(content),
     )
     db.add(att)
@@ -163,7 +163,7 @@ async def download_file(
     if not att:
         raise HTTPException(404, "File not found")
     await get_owned_chat(att.chat_id, profile.id, db)
-    full_path = os.path.realpath(att.path)
+    full_path = os.path.realpath(os.path.join(settings.uploads_dir, att.path))
     uploads_dir = os.path.realpath(settings.uploads_dir)
     if not full_path.startswith(uploads_dir + os.sep) or not os.path.exists(full_path):
         raise HTTPException(404, "File missing from disk")

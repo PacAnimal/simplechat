@@ -163,7 +163,7 @@ async def test_generated_image_ownership_enforced(
             "type": "image_generated",
             "url": f"/api/generated/{filename}",
             "prompt": "test",
-            "path": img_path,
+            "path": filename,
         }
         yield {"type": "text_delta", "content": "done"}
 

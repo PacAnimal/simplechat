@@ -83,7 +83,7 @@ GENERATE_IMAGE_TOOL = {
             },
             "image_path": {
                 "type": "string",
-                "description": "Path of a previously generated image to edit. Only provide this when the user wants to modify an existing image.",
+                "description": "URL of a previously generated image to edit (e.g. /api/generated/abc.png). Only provide this when the user wants to modify an existing image.",
             },
         },
         "required": ["prompt"],

@@ -44,9 +44,17 @@ async def reset_db(
 
     uploads_real = os.path.realpath(settings.uploads_dir)
     generated_real = os.path.realpath(settings.generated_dir)
-    for path in att_paths + img_paths:
-        real = os.path.realpath(path)
-        if not (real.startswith(uploads_real + os.sep) or real.startswith(generated_real + os.sep)):
+    for name in att_paths:
+        real = os.path.realpath(os.path.join(settings.uploads_dir, name))
+        if not real.startswith(uploads_real + os.sep):
+            continue
+        try:
+            os.remove(real)
+        except OSError:
+            pass
+    for name in img_paths:
+        real = os.path.realpath(os.path.join(settings.generated_dir, name))
+        if not real.startswith(generated_real + os.sep):
             continue
         try:
             os.remove(real)

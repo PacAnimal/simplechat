@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .api.router import router
 from .app_logging import setup_loggers
 from .config import settings
-from .database import run_migrations
+from .database import SessionLocal, run_migrations
 from .event_logging import setup_audit_log
 from .http_logging import HttpLoggingMiddleware
 from .jwt_secret import resolve as resolve_jwt_secret
@@ -44,6 +44,28 @@ class _LocalProxyMiddleware:
         await self.app(scope, receive, send)
 
 
+async def _normalize_stored_paths():
+    """Normalize legacy Attachment and GeneratedImage path records to bare filenames."""
+    import logging
+
+    from sqlalchemy import select
+
+    from .models import Attachment, GeneratedImage
+
+    logger = logging.getLogger(__name__)
+    async with SessionLocal() as db:
+        updated = 0
+        for model in (Attachment, GeneratedImage):
+            result = await db.execute(select(model))
+            for row in result.scalars().all():
+                if row.path and os.sep in row.path:
+                    row.path = os.path.basename(row.path)
+                    updated += 1
+        if updated:
+            await db.commit()
+            logger.info("Normalized %d stored path(s) to filename", updated)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     data_dir = _db_dir()
@@ -54,6 +76,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.uploads_dir, exist_ok=True)
     os.makedirs(settings.generated_dir, exist_ok=True)
     await run_migrations()
+    await _normalize_stored_paths()
     try:
         await refresh_models()
     except Exception:

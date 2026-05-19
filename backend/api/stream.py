@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -43,25 +44,30 @@ def _get_chat_lock(chat_id: int) -> asyncio.Lock:
     return _chat_locks[chat_id]
 
 
+def _att_full_path(att: Attachment) -> str:
+    return os.path.join(settings.uploads_dir, att.path)
+
+
 async def _attachment_text(att: Attachment) -> str:
+    full_path = _att_full_path(att)
     if att.mime_type in _DOC_MIME_TYPES:
         try:
-            body = await asyncio.to_thread(_doc_to_text, att.path, att.mime_type)
+            body = await asyncio.to_thread(_doc_to_text, full_path, att.mime_type)
             return f"\n\n[Attached document: {att.filename}]\n```\n{body}\n```"
         except Exception:
             logger.warning(
-                "Failed to extract document %s (%s)", att.filename, att.path, exc_info=True
+                "Failed to extract document %s (%s)", att.filename, full_path, exc_info=True
             )
             return ""
     if att.mime_type not in _TEXT_MIME_TYPES:
         return ""
     try:
-        async with aiofiles.open(att.path, encoding="utf-8", errors="replace") as f:
+        async with aiofiles.open(full_path, encoding="utf-8", errors="replace") as f:
             body = await f.read()
         return f"\n\n[Attached file: {att.filename}]\n```\n{body}\n```"
     except Exception:
         logger.warning(
-            "Failed to read attachment %s (%s)", att.filename, att.path, exc_info=True
+            "Failed to read attachment %s (%s)", att.filename, full_path, exc_info=True
         )
         return ""
 
@@ -136,13 +142,14 @@ def _doc_to_text(path: str, mime: str) -> str:
 async def _attachment_image_block(att: Attachment) -> dict | None:
     if att.mime_type not in _IMAGE_MIME_TYPES:
         return None
+    full_path = _att_full_path(att)
     try:
-        async with aiofiles.open(att.path, "rb") as f:
+        async with aiofiles.open(full_path, "rb") as f:
             data = await f.read()
         return {"type": "image", "media_type": att.mime_type, "data": base64.b64encode(data).decode()}
     except Exception:
         logger.warning(
-            "Failed to read image attachment %s (%s)", att.filename, att.path, exc_info=True
+            "Failed to read image attachment %s (%s)", att.filename, full_path, exc_info=True
         )
         return None
 
@@ -206,9 +213,7 @@ async def _build_messages(chat_id: int, db: AsyncSession) -> list[dict]:
         elif m.role == "assistant":
             content = m.content
             for img in m.generated_images:
-                content += (
-                    f"\n\n[Generated image — path: {img.path} | prompt: {img.prompt}]"
-                )
+                content += f"\n\n[Generated image — url: /api/generated/{img.path} | prompt: {img.prompt}]"
             out.append({"role": "assistant", "content": content})
     return out
 

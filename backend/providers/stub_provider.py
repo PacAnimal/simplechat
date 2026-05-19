@@ -58,12 +58,12 @@ class StubProvider:
         if is_image_request:
             yield {"type": sse_events.TOOL_START, "name": "generate_image"}
             await asyncio.sleep(0.05)
-            path = _ensure_placeholder()
+            _ensure_placeholder()
             yield {
                 "type": sse_events.IMAGE_GENERATED,
                 "url": f"/api/generated/{_PLACEHOLDER_FILENAME}",
                 "prompt": last_user,
-                "path": path,
+                "path": _PLACEHOLDER_FILENAME,
             }
             yield {
                 "type": sse_events.TOOL_RESULT,

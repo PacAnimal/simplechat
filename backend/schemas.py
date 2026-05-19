@@ -1,4 +1,3 @@
-import os
 import re
 from datetime import datetime
 
@@ -83,7 +82,7 @@ class GeneratedImageEmbed(BaseModel):
         if hasattr(data, "path"):
             return {
                 "prompt": data.prompt,
-                "url": f"/api/generated/{os.path.basename(data.path)}",
+                "url": f"/api/generated/{data.path}",
             }
         return data
 

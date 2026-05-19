@@ -26,13 +26,16 @@ async def generate_image(
         size = "1024x1024"
 
     if image_path:
-        # validate path is within generated dir to prevent traversal
+        # accept filename, URL (/api/generated/abc.png), or legacy full path
+        image_filename = os.path.basename(image_path)
+        if not image_filename or "/" in image_filename or image_filename.startswith("."):
+            raise ValueError("Invalid image_path")
+        image_path = os.path.join(settings.generated_dir, image_filename)
+
+        # validate resolved path is within generated dir to prevent traversal
         real_path = os.path.realpath(image_path)
         real_gen_dir = os.path.realpath(settings.generated_dir)
-        if (
-            not real_path.startswith(real_gen_dir + os.sep)
-            and real_path != real_gen_dir
-        ):
+        if not real_path.startswith(real_gen_dir + os.sep):
             raise ValueError("Invalid image_path: must be within generated directory")
 
         async with aiofiles.open(image_path, "rb") as f:
@@ -68,7 +71,7 @@ async def generate_image(
         await f.write(image_data)
 
     return {
-        "path": dest_path,
+        "path": filename,
         "url": f"/api/generated/{filename}",
         "prompt": prompt,
         "text": "I've generated the image. It will be displayed inline.",
