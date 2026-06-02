@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -36,14 +36,13 @@ function Avatar({ role }: { role: string }) {
 }
 
 function useAuthedBlobUrl(url: string): string {
+  const needsAuth = url.startsWith("/api/generated/") || url.startsWith("/api/files/");
   const [blobUrl, setBlobUrl] = useState("");
+
   useEffect(() => {
+    if (!needsAuth) return;
     const token = getToken();
-    const needsAuth = url.startsWith("/api/generated/") || url.startsWith("/api/files/");
-    if (!needsAuth || !token) {
-      setBlobUrl(url);
-      return;
-    }
+    if (!token) return;
     let objectUrl = "";
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.blob())
@@ -55,8 +54,10 @@ function useAuthedBlobUrl(url: string): string {
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [url]);
-  return blobUrl;
+  }, [url, needsAuth]);
+
+  if (!needsAuth) return url;
+  return blobUrl || url;
 }
 
 async function downloadAttachment(att: Attachment) {
@@ -224,8 +225,8 @@ function getNodeText(node: React.ReactNode): string {
   if (typeof node === "number") return String(node);
   if (!node) return "";
   if (Array.isArray(node)) return node.map(getNodeText).join("");
-  if (typeof node === "object" && "props" in (node as object)) {
-    return getNodeText((node as React.ReactElement).props.children);
+  if (React.isValidElement(node)) {
+    return getNodeText((node.props as { children?: React.ReactNode }).children);
   }
   return "";
 }
@@ -343,15 +344,15 @@ function AssistantContent({ content }: { content: string }) {
 
 export default function MessageBubble({ message, images = message.images ?? [], noAnimate = false }: Props) {
   const isUser = message.role === "user";
-  // once noAnimate is set, permanently suppress the animation for this element's lifetime
-  // so it doesn't retrigger if the prop clears when the next stream completes
-  const suppressAnim = useRef(noAnimate);
-  if (noAnimate) suppressAnim.current = true;
+  // latch: once noAnimate is ever true, keep suppressing for this element's lifetime
+  const [suppressAnim, setSuppressAnim] = useState(noAnimate);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (noAnimate) setSuppressAnim(true); }, [noAnimate]);
 
   return (
     <div
       className="group flex gap-3 max-w-3xl w-full mx-auto animate-fade-in"
-      style={suppressAnim.current ? { animation: "none" } : undefined}
+      style={suppressAnim ? { animation: "none" } : undefined}
       data-testid={`message-${message.role}`}
     >
       <Avatar role={message.role} />

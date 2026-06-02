@@ -260,12 +260,15 @@ class OpenAIProvider:
                     item = event.item
                     item_type = getattr(item, "type", None)
                     if item_type == "web_search_call":
-                        # extract source URLs from the completed search result
-                        sources = [
-                            r.url
-                            for r in (getattr(item, "results", None) or [])
-                            if getattr(r, "url", None)
-                        ]
+                        # extract source URLs — v2 SDK puts them in item.action.sources
+                        action = getattr(item, "action", None)
+                        sources = []
+                        if action and getattr(action, "type", None) == "search":
+                            sources = [
+                                s.url
+                                for s in (getattr(action, "sources", None) or [])
+                                if getattr(s, "url", None)
+                            ]
                         yield {
                             "type": sse_events.TOOL_RESULT,
                             "name": "web_search",

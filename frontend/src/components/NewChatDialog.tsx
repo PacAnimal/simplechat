@@ -51,25 +51,21 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
     return m !== null && m.length > 0;
   });
 
-  // when live data arrives, switch away from any now-unavailable provider
-  useEffect(() => {
-    if (!remoteModels) return;
-    const available = ALL_PROVIDERS.filter((p) => (remoteModels[p] ?? []).length > 0);
-    if (available.length > 0 && !available.includes(provider)) {
-      setProvider(available[0]);
-    }
-  }, [remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
+  // derive effective provider: fall back to first available when stored choice isn't loaded yet
+  const effectiveProvider: Provider =
+    availableProviders.length > 0 && !availableProviders.includes(provider)
+      ? availableProviders[0]
+      : provider;
 
-  // sync selected model when provider or model list changes
-  useEffect(() => {
-    const options = modelsFor(provider) ?? [];
-    if (options.length > 0 && !options.find((o) => o.value === model)) {
-      setModel(options[0].value);
-    }
-  }, [provider, remoteModels]); // eslint-disable-line react-hooks/exhaustive-deps
+  // derive effective model: default to first option when current isn't in the list
+  const options = modelsFor(effectiveProvider) ?? [];
+  const effectiveModel =
+    options.length > 0 && !options.find((o) => o.value === model)
+      ? options[0].value
+      : model;
 
   const mutation = useMutation({
-    mutationFn: () => api.createChat(provider, model),
+    mutationFn: () => api.createChat(effectiveProvider, effectiveModel),
     onSuccess: (chat) => {
       qc.invalidateQueries({ queryKey: ["chats"] });
       onCreated(chat);
@@ -79,8 +75,6 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
   function handleProviderChange(p: Provider) {
     setProvider(p);
     try { localStorage.setItem(LAST_PROVIDER_KEY, p); } catch { /* ignore */ }
-    const options = modelsFor(p) ?? [];
-    setModel(options[0]?.value ?? "");
   }
 
   useEffect(() => {
@@ -88,8 +82,6 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
-
-  const options = modelsFor(provider) ?? [];
 
   return (
     <div
@@ -124,7 +116,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
                     key={p}
                     onClick={() => handleProviderChange(p)}
                     className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-xl border text-sm font-medium transition-all ${
-                      provider === p
+                      effectiveProvider === p
                         ? "border-accent bg-accent/10 text-accent shadow-sm"
                         : "border-border text-secondary hover:border-accent/40 hover:text-primary"
                     }`}
@@ -145,7 +137,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
             </label>
             <div className="relative">
               <select
-                value={model}
+                value={effectiveModel}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={!remoteModels}
                 className="w-full appearance-none bg-input border border-border rounded-xl px-4 py-2.5 text-sm text-primary focus:outline-none focus:border-accent cursor-pointer pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -168,7 +160,7 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
 
           <button
             onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || !model}
+            disabled={mutation.isPending || !effectiveModel}
             className="w-full py-2.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-accent/20 mt-1"
             data-testid="create-chat-button"
           >

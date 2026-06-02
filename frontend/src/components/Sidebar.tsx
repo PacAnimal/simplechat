@@ -61,11 +61,9 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
   });
 
   useEffect(() => {
-    if (searchOpen) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery("");
-    }
+    if (!searchOpen) return;
+    const id = setTimeout(() => searchInputRef.current?.focus(), 50);
+    return () => clearTimeout(id);
   }, [searchOpen]);
 
   const deleteMutation = useMutation({
@@ -92,9 +90,14 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
     setConfirmDeleteId(null);
   }
 
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }
+
   function handleSearchResultClick(result: MessageSearchResult) {
     onSelectChat(result.chat_id);
-    setSearchOpen(false);
+    closeSearch();
   }
 
   return (
@@ -119,7 +122,7 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
         </div>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={() => setSearchOpen((o) => !o)}
+            onClick={() => { if (searchOpen) { closeSearch(); } else { setSearchOpen(true); } }}
             className={cn(
               "p-1.5 rounded-lg transition-colors",
               searchOpen
