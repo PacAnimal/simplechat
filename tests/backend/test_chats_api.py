@@ -17,7 +17,7 @@ async def test_create_chat_openai(client: AsyncClient):
     assert data["provider"] == "openai"
     assert data["model"] == "gpt-4o"
     assert data["title"] == "New Chat"
-    assert data["web_search_enabled"] is False
+    assert data["web_search_enabled"] is True
     assert "id" in data
 
 
