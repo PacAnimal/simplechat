@@ -39,6 +39,7 @@ class ChatCreate(BaseModel):
     model: str | None = None
     title: str | None = None  # None means no explicit title; auto-title will apply
     dataset_id: int | None = None
+    web_search_enabled: bool | None = None  # None = use provider default
 
 
 class ChatUpdate(BaseModel):
