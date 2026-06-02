@@ -105,6 +105,7 @@ class MessageRead(BaseModel):
     role: str
     content: str
     thinking: str | None = None
+    tool_calls: list[dict] | None = None
     created_at: datetime
     images: list[GeneratedImageEmbed] = Field(
         default=[], validation_alias="generated_images"
@@ -112,6 +113,17 @@ class MessageRead(BaseModel):
     attachments: list[AttachmentRead] = []
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+    @field_validator("tool_calls", mode="before")
+    @classmethod
+    def _parse_tool_calls(cls, v):
+        import json as _json
+        if isinstance(v, str):
+            try:
+                return _json.loads(v)
+            except Exception:
+                return None
+        return v
 
 
 class MessageSearchResult(BaseModel):

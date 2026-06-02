@@ -336,19 +336,20 @@ async def test_openai_stream_responses_text():
 
 
 async def test_openai_stream_responses_web_search_sources():
-    """Responses API must yield SEARCHING and TOOL_RESULT with source URLs from item.action.sources."""
+    """Responses API must yield SEARCHING and TOOL_RESULT with source URLs from url_citation annotations."""
     from backend.providers.openai_provider import OpenAIProvider
 
-    action = MagicMock(type="search", sources=[
-        MagicMock(url="https://example.com"),
-        MagicMock(url="https://other.com"),
-    ])
-    web_search_item = MagicMock(type="web_search_call", action=action)
+    web_search_item = MagicMock(type="web_search_call")
+
+    ann1 = MagicMock(type="url_citation", url="https://example.com")
+    ann2 = MagicMock(type="url_citation", url="https://other.com")
 
     events_sequence = [
         MagicMock(type="response.web_search_call.in_progress"),
         MagicMock(type="response.output_item.done", item=web_search_item),
         MagicMock(type="response.output_text.delta", delta="Results found."),
+        MagicMock(type="response.output_text.annotation.added", annotation=ann1),
+        MagicMock(type="response.output_text.annotation.added", annotation=ann2),
     ]
 
     async def fake_create(**kwargs):
@@ -373,14 +374,14 @@ async def test_openai_stream_responses_web_search_sources():
     assert text == "Results found."
 
 
-async def test_openai_stream_responses_non_search_action_yields_empty_sources():
-    """Responses API: web_search_call with a non-search action (e.g. open_page) must yield tool_result with empty sources."""
+async def test_openai_stream_responses_web_search_no_annotations_yields_empty_sources():
+    """Responses API: when a web search completes but no url_citation annotations arrive, tool_result must have empty sources."""
     from backend.providers.openai_provider import OpenAIProvider
 
-    action = MagicMock(type="open_page")  # not "search"
-    web_search_item = MagicMock(type="web_search_call", action=action)
+    web_search_item = MagicMock(type="web_search_call")
 
     events_sequence = [
+        MagicMock(type="response.web_search_call.in_progress"),
         MagicMock(type="response.output_item.done", item=web_search_item),
         MagicMock(type="response.output_text.delta", delta="Done."),
     ]
@@ -395,7 +396,7 @@ async def test_openai_stream_responses_non_search_action_yields_empty_sources():
     with patch.object(provider.client.responses, "create", new=fake_create):
         events = []
         async for event in provider._stream_responses(
-            [{"role": "user", "content": "Open page"}], "gpt-4o", True
+            [{"role": "user", "content": "Search for X"}], "gpt-4o", True
         ):
             events.append(event)
 

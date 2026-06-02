@@ -84,6 +84,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
       let accContent = "";
       let accThinking = "";
       let accImages: Message["images"] = [];
+      let accToolCalls: Message["tool_calls"] = null;
 
       try {
         for await (const event of streamMessage(chatId, content, attachmentIds, controller.signal)) {
@@ -118,6 +119,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
               });
               break;
             case "searching":
+              accToolCalls = [...(accToolCalls ?? []), { name: "web_search", done: false }];
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
@@ -128,6 +130,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
               });
               break;
             case "tool_start":
+              accToolCalls = [...(accToolCalls ?? []), { name: event.name, done: false }];
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
@@ -137,20 +140,29 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
                 });
               });
               break;
-            case "tool_result":
+            case "tool_result": {
+              const calls: NonNullable<Message["tool_calls"]> = [...(accToolCalls ?? [])];
+              for (let i = calls.length - 1; i >= 0; i--) {
+                if (calls[i].name === event.name && !calls[i].done) {
+                  calls[i] = { ...calls[i], done: true, error: event.error, sources: event.sources };
+                  break;
+                }
+              }
+              accToolCalls = calls;
               setActiveStreams((prev) => {
                 const entry = prev.get(chatId);
                 if (!entry) return prev;
-                const calls = [...entry.toolCalls];
-                for (let i = calls.length - 1; i >= 0; i--) {
-                  if (calls[i].name === event.name && !calls[i].done) {
-                    calls[i] = { ...calls[i], done: true, error: event.error, sources: event.sources };
+                const streamCalls = [...entry.toolCalls];
+                for (let i = streamCalls.length - 1; i >= 0; i--) {
+                  if (streamCalls[i].name === event.name && !streamCalls[i].done) {
+                    streamCalls[i] = { ...streamCalls[i], done: true, error: event.error, sources: event.sources };
                     break;
                   }
                 }
-                return new Map(prev).set(chatId, { ...entry, toolCalls: calls });
+                return new Map(prev).set(chatId, { ...entry, toolCalls: streamCalls });
               });
               break;
+            }
             case "user_message_saved":
               qc.setQueryData<Message[]>(["messages", chatId], (old) => [
                 ...(old ?? []),
@@ -160,6 +172,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
                   role: "user" as const,
                   content,
                   thinking: null,
+                  tool_calls: null,
                   images: [],
                   attachments: [],
                   created_at: new Date().toISOString(),
@@ -184,6 +197,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
                   role: "assistant" as const,
                   content: accContent,
                   thinking: accThinking || null,
+                  tool_calls: accToolCalls,
                   images: accImages,
                   attachments: [],
                   created_at: new Date().toISOString(),

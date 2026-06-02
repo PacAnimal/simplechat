@@ -361,6 +361,9 @@ export default function MessageBubble({ message, images = message.images ?? [], 
           {isUser ? "You" : "Assistant"}
         </p>
         {!isUser && message.thinking && <ThinkingPanel content={message.thinking} />}
+        {!isUser && message.tool_calls && message.tool_calls.length > 0 && (
+          <ToolCallsPanel calls={message.tool_calls} />
+        )}
         {isUser ? (
           <>
             <p className="text-[0.9375rem] text-primary leading-[1.7] whitespace-pre-wrap">

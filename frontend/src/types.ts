@@ -46,6 +46,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   thinking: string | null;
+  tool_calls: ToolCallRecord[] | null;
   images: InlineImage[];
   attachments: Attachment[];
   created_at: string;

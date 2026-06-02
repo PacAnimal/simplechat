@@ -74,7 +74,7 @@ def _responses_tools(include_web_search: bool) -> list:
         },
     ]
     if include_web_search:
-        tools.append({"type": "web_search"})
+        tools.append({"type": "web_search_2025_08_26"})
     return tools
 
 
@@ -243,6 +243,9 @@ class OpenAIProvider:
             tool_calls: list[dict] = []
             # buffer text per iteration so intermediate tool-loop text never reaches the client
             pending_text: list[str] = []
+            # url_citation annotations accumulate via response.output_text.annotation.added
+            annotation_sources: list[str] = []
+            web_search_done = False
 
             stream = await self.client.responses.create(
                 model=model,
@@ -256,25 +259,21 @@ class OpenAIProvider:
                     pending_text.append(event.delta)
                 elif event.type == "response.web_search_call.in_progress":
                     yield {"type": sse_events.SEARCHING, "name": "web_search"}
+                elif event.type == "response.output_text.annotation.added":
+                    # sources arrive as url_citation annotations on the text output, not on the
+                    # web_search_call item (item.action.sources is always None in the Responses API);
+                    # the SDK types annotation as `object` so it deserialises as a plain dict
+                    ann = getattr(event, "annotation", None)
+                    ann_type = ann.get("type") if isinstance(ann, dict) else getattr(ann, "type", None)
+                    if ann_type == "url_citation":
+                        url = ann.get("url") if isinstance(ann, dict) else getattr(ann, "url", None)
+                        if url and url not in annotation_sources:
+                            annotation_sources.append(url)
                 elif event.type == "response.output_item.done":
                     item = event.item
                     item_type = getattr(item, "type", None)
                     if item_type == "web_search_call":
-                        # extract source URLs — v2 SDK puts them in item.action.sources
-                        action = getattr(item, "action", None)
-                        sources = []
-                        if action and getattr(action, "type", None) == "search":
-                            sources = [
-                                s.url
-                                for s in (getattr(action, "sources", None) or [])
-                                if getattr(s, "url", None)
-                            ]
-                        yield {
-                            "type": sse_events.TOOL_RESULT,
-                            "name": "web_search",
-                            "content": "",
-                            "sources": sources,
-                        }
+                        web_search_done = True
                     elif not exceeded and item_type == "function_call":
                         tool_calls.append({
                             "call_id": item.call_id,
@@ -287,6 +286,14 @@ class OpenAIProvider:
                             "name": item.name,
                             "arguments": item.arguments,
                         })
+
+            if web_search_done:
+                yield {
+                    "type": sse_events.TOOL_RESULT,
+                    "name": "web_search",
+                    "content": "",
+                    "sources": annotation_sources,
+                }
 
             if not tool_calls or exceeded:
                 # final iteration — flush buffered text to the client

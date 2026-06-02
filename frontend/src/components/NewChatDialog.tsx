@@ -115,7 +115,11 @@ export default function NewChatDialog({ onCreated, onClose }: Props) {
                   <button
                     key={p}
                     onClick={() => handleProviderChange(p)}
-                    className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-xl border text-sm font-medium transition-all ${
+                    className={`flex items-center rounded-xl border text-sm font-medium transition-all ${
+                      availableProviders.length >= 3
+                        ? "justify-center gap-1.5 py-2 px-2"
+                        : "gap-2.5 py-2.5 px-3.5"
+                    } ${
                       effectiveProvider === p
                         ? "border-accent bg-accent/10 text-accent shadow-sm"
                         : "border-border text-secondary hover:border-accent/40 hover:text-primary"

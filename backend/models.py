@@ -124,6 +124,8 @@ class Message(Base):
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False, default="")
     thinking = Column(Text, nullable=True)
+    # JSON array of {name, done, sources?, error?} — persists tool call results for display
+    tool_calls = Column(Text, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow)
 
     chat = relationship("Chat", back_populates="messages")

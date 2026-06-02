@@ -246,9 +246,14 @@ async def _save_assistant_message(
     generated_images: list[dict],
     chat: Chat,
     db: AsyncSession,
+    tool_calls: list[dict] | None = None,
 ) -> Message:
     assistant_msg = Message(
-        chat_id=chat_id, role="assistant", content=content, thinking=thinking
+        chat_id=chat_id,
+        role="assistant",
+        content=content,
+        thinking=thinking,
+        tool_calls=json.dumps(tool_calls) if tool_calls else None,
     )
     db.add(assistant_msg)
     chat.updated_at = utcnow()
@@ -490,6 +495,7 @@ async def _event_stream(
         full_content = ""
         thinking_content = ""
         generated_images: list[dict] = []
+        tool_call_records: list[dict] = []
 
         async def _watch_disconnect():
             while not await request.is_disconnected():
@@ -509,12 +515,27 @@ async def _event_stream(
                     thinking_content += event.get("content", "")
                 elif etype == sse_events.IMAGE_GENERATED:
                     generated_images.append(event)
+                elif etype == sse_events.SEARCHING:
+                    tool_call_records.append({"name": event.get("name", "web_search"), "done": False})
+                elif etype == sse_events.TOOL_START:
+                    tool_call_records.append({"name": event.get("name", ""), "done": False})
+                elif etype == sse_events.TOOL_RESULT:
+                    name = event.get("name", "")
+                    for rec in reversed(tool_call_records):
+                        if rec["name"] == name and not rec["done"]:
+                            rec["done"] = True
+                            if event.get("sources"):
+                                rec["sources"] = event["sources"]
+                            if event.get("error"):
+                                rec["error"] = event["error"]
+                            break
                 yield f"data: {json.dumps(event)}\n\n"
         finally:
             disconnect_task.cancel()
 
         assistant_msg = await _save_assistant_message(
-            chat.id, full_content, thinking_content or None, generated_images, chat, db
+            chat.id, full_content, thinking_content or None, generated_images, chat, db,
+            tool_calls=tool_call_records if tool_call_records else None,
         )
 
         # release lock here so the user can send another message while title generates

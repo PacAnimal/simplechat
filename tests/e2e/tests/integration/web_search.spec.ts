@@ -1,15 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
 import { resetDB, loginWithTestProfile, createChat, sendMessage, BACKEND } from "./helpers";
 
+async function getToken(page: Page): Promise<string> {
+  return page.evaluate(() => localStorage.getItem("simplechat_token") ?? "");
+}
+
 async function enableWebSearch(page: Page, chatId: number) {
+  const token = await getToken(page);
   await page.request.patch(`${BACKEND}/api/chats/${chatId}`, {
     data: { web_search_enabled: true },
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
   });
 }
 
 async function getLastChatId(page: Page): Promise<number> {
-  const res = await page.request.get(`${BACKEND}/api/chats`);
+  const token = await getToken(page);
+  const res = await page.request.get(`${BACKEND}/api/chats`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const chats = await res.json();
   return chats[0].id;
 }
