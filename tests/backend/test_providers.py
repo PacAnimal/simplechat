@@ -214,6 +214,196 @@ async def test_anthropic_stream_web_search_event():
     assert any(e["type"] == "text_delta" for e in events)
 
 
+async def test_anthropic_stream_web_search_sources():
+    """web_search_tool_result block must yield a tool_result event with source URLs."""
+    from backend.providers.anthropic_provider import AnthropicProvider
+
+    src1 = MagicMock()
+    src1.url = "https://example.com"
+    src2 = MagicMock()
+    src2.url = "https://other.com"
+
+    result_block = MagicMock()
+    result_block.type = "web_search_tool_result"
+    result_block.content = [src1, src2]
+
+    events_sequence = [
+        MagicMock(type="content_block_start", content_block=result_block),
+        MagicMock(type="content_block_stop"),
+        MagicMock(
+            type="content_block_start", content_block=MagicMock(type="text", id="blk_1")
+        ),
+        MagicMock(
+            type="content_block_delta",
+            delta=MagicMock(type="text_delta", text="Found it."),
+        ),
+        MagicMock(type="content_block_stop"),
+    ]
+
+    async def async_iter(items):
+        for item in items:
+            yield item
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+    mock_stream.__aexit__ = AsyncMock(return_value=False)
+    mock_stream.__aiter__ = lambda self: async_iter(events_sequence)
+
+    provider = AnthropicProvider()
+    with patch.object(provider.client.messages, "stream", return_value=mock_stream):
+        events = []
+        async for event in provider._stream(
+            [{"role": "user", "content": "Search for X"}], "claude-sonnet-4-6", True
+        ):
+            events.append(event)
+
+    tool_results = [e for e in events if e["type"] == "tool_result"]
+    assert len(tool_results) == 1
+    assert tool_results[0]["sources"] == ["https://example.com", "https://other.com"]
+    assert any(e["type"] == "text_delta" for e in events)
+
+
+async def test_anthropic_stream_web_search_error_yields_no_sources():
+    """web_search_tool_result with an error payload (not a list) must not yield sources."""
+    from backend.providers.anthropic_provider import AnthropicProvider
+
+    error_block = MagicMock()
+    error_block.type = "web_search_tool_result"
+    error_block.content = MagicMock()  # error object, not a list
+
+    events_sequence = [
+        MagicMock(type="content_block_start", content_block=error_block),
+        MagicMock(type="content_block_stop"),
+        MagicMock(
+            type="content_block_start", content_block=MagicMock(type="text", id="blk_1")
+        ),
+        MagicMock(
+            type="content_block_delta",
+            delta=MagicMock(type="text_delta", text="Search failed."),
+        ),
+        MagicMock(type="content_block_stop"),
+    ]
+
+    async def async_iter(items):
+        for item in items:
+            yield item
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+    mock_stream.__aexit__ = AsyncMock(return_value=False)
+    mock_stream.__aiter__ = lambda self: async_iter(events_sequence)
+
+    provider = AnthropicProvider()
+    with patch.object(provider.client.messages, "stream", return_value=mock_stream):
+        events = []
+        async for event in provider._stream(
+            [{"role": "user", "content": "Search for X"}], "claude-sonnet-4-6", True
+        ):
+            events.append(event)
+
+    assert not any(e["type"] == "tool_result" for e in events)
+    assert any(e["type"] == "text_delta" for e in events)
+
+
+# ---- OpenAI Responses API path ----
+
+
+async def test_openai_stream_responses_text():
+    """Responses API path must stream text deltas correctly."""
+    from backend.providers.openai_provider import OpenAIProvider
+
+    events_sequence = [
+        MagicMock(type="response.output_text.delta", delta="Hello "),
+        MagicMock(type="response.output_text.delta", delta="world"),
+    ]
+
+    async def fake_create(**kwargs):
+        async def gen():
+            for ev in events_sequence:
+                yield ev
+        return gen()
+
+    provider = OpenAIProvider()
+    with patch.object(provider.client.responses, "create", new=fake_create):
+        events = []
+        async for event in provider._stream_responses(
+            [{"role": "user", "content": "Hi"}], "gpt-4o", False
+        ):
+            events.append(event)
+
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    assert text == "Hello world"
+
+
+async def test_openai_stream_responses_web_search_sources():
+    """Responses API must yield SEARCHING and TOOL_RESULT with source URLs from item.action.sources."""
+    from backend.providers.openai_provider import OpenAIProvider
+
+    action = MagicMock(type="search", sources=[
+        MagicMock(url="https://example.com"),
+        MagicMock(url="https://other.com"),
+    ])
+    web_search_item = MagicMock(type="web_search_call", action=action)
+
+    events_sequence = [
+        MagicMock(type="response.web_search_call.in_progress"),
+        MagicMock(type="response.output_item.done", item=web_search_item),
+        MagicMock(type="response.output_text.delta", delta="Results found."),
+    ]
+
+    async def fake_create(**kwargs):
+        async def gen():
+            for ev in events_sequence:
+                yield ev
+        return gen()
+
+    provider = OpenAIProvider()
+    with patch.object(provider.client.responses, "create", new=fake_create):
+        events = []
+        async for event in provider._stream_responses(
+            [{"role": "user", "content": "Search for X"}], "gpt-4o", True
+        ):
+            events.append(event)
+
+    assert any(e["type"] == "searching" for e in events)
+    tool_results = [e for e in events if e["type"] == "tool_result"]
+    assert len(tool_results) == 1
+    assert tool_results[0]["sources"] == ["https://example.com", "https://other.com"]
+    text = "".join(e["content"] for e in events if e["type"] == "text_delta")
+    assert text == "Results found."
+
+
+async def test_openai_stream_responses_non_search_action_yields_empty_sources():
+    """Responses API: web_search_call with a non-search action (e.g. open_page) must yield tool_result with empty sources."""
+    from backend.providers.openai_provider import OpenAIProvider
+
+    action = MagicMock(type="open_page")  # not "search"
+    web_search_item = MagicMock(type="web_search_call", action=action)
+
+    events_sequence = [
+        MagicMock(type="response.output_item.done", item=web_search_item),
+        MagicMock(type="response.output_text.delta", delta="Done."),
+    ]
+
+    async def fake_create(**kwargs):
+        async def gen():
+            for ev in events_sequence:
+                yield ev
+        return gen()
+
+    provider = OpenAIProvider()
+    with patch.object(provider.client.responses, "create", new=fake_create):
+        events = []
+        async for event in provider._stream_responses(
+            [{"role": "user", "content": "Open page"}], "gpt-4o", True
+        ):
+            events.append(event)
+
+    tool_results = [e for e in events if e["type"] == "tool_result"]
+    assert len(tool_results) == 1
+    assert tool_results[0]["sources"] == []
+
+
 # ---- Optional API key guard ----
 
 
