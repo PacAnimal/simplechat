@@ -109,6 +109,7 @@ async def create_chat(
         provider=body.provider,
         model=model,
         dataset_id=body.dataset_id,
+        web_search_enabled=(body.provider in ("openai", "anthropic")),
     )
     db.add(chat)
     await db.commit()
