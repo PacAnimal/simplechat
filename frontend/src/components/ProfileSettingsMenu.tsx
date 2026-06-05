@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Settings2Icon, LogOutIcon, UserCircleIcon, KeyRoundIcon, PencilIcon } from "lucide-react";
-import { api, storeProfile } from "../lib/api";
+import { Settings2Icon, LogOutIcon, UserCircleIcon, KeyRoundIcon, PencilIcon, UsersIcon } from "lucide-react";
+import { api, setToken, storeProfile } from "../lib/api";
 import type { Profile } from "../types";
 import { AVATARS } from "../types";
 import { Avatar } from "./ProfilePicker";
@@ -12,6 +12,7 @@ interface Props {
   profile: Profile;
   onProfileUpdated: (profile: Profile) => void;
   onLogout: () => void;
+  onImpersonate: (profile: Profile) => void;
 }
 
 // 4 rows × 9 cols — warm → cool → neutral, three brightness steps each
@@ -36,9 +37,9 @@ const COLOR_SWATCHES = [
   "#18181b", "#27272a", "#3f3f46",
 ];
 
-export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogout }: Props) {
+export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogout, onImpersonate }: Props) {
   const [open, setOpen] = useState(false);
-  const [panel, setPanel] = useState<"avatar" | "password" | "name" | null>(null);
+  const [panel, setPanel] = useState<"avatar" | "password" | "name" | "impersonate" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.getConfig });
   const minLen = config?.password_min_length ?? 8;
@@ -54,7 +55,7 @@ export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogou
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function handleOpenPanel(p: "avatar" | "password" | "name") {
+  function handleOpenPanel(p: "avatar" | "password" | "name" | "impersonate") {
     setPanel(p);
     setOpen(false);
   }
@@ -75,6 +76,12 @@ export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogou
           <MenuItem icon={<UserCircleIcon size={14} />} label="Change avatar" onClick={() => handleOpenPanel("avatar")} />
           <MenuItem icon={<PencilIcon size={14} />} label="Change name" onClick={() => handleOpenPanel("name")} />
           <MenuItem icon={<KeyRoundIcon size={14} />} label="Change password" onClick={() => handleOpenPanel("password")} />
+          {config?.admin && profile.name.toLowerCase() === config.admin && (
+            <>
+              <div className="mx-2 border-t border-border my-1" />
+              <MenuItem icon={<UsersIcon size={14} />} label="Impersonate…" onClick={() => handleOpenPanel("impersonate")} />
+            </>
+          )}
           <div className="mx-2 border-t border-border my-1" />
           <MenuItem icon={<LogOutIcon size={14} />} label="Log out" onClick={onLogout} danger />
         </div>
@@ -101,6 +108,14 @@ export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogou
           profile={profile}
           onDone={() => setPanel(null)}
           minPasswordLength={minLen}
+        />
+      )}
+
+      {panel === "impersonate" && (
+        <ImpersonatePanel
+          currentProfile={profile}
+          onImpersonate={(p) => { onImpersonate(p); setPanel(null); }}
+          onClose={() => setPanel(null)}
         />
       )}
     </div>
@@ -269,6 +284,53 @@ function NamePanel({ profile, onUpdated, onClose }: { profile: Profile; onUpdate
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ImpersonatePanel({ currentProfile, onImpersonate, onClose }: { currentProfile: Profile; onImpersonate: (p: Profile) => void; onClose: () => void }) {
+  const [error, setError] = useState("");
+  const { data: profiles, isLoading } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
+  const others = profiles?.filter((p) => p.id !== currentProfile.id) ?? [];
+
+  async function handleSelect(targetId: number) {
+    setError("");
+    try {
+      const { token, profile } = await api.impersonateProfile(targetId);
+      setToken(token);
+      storeProfile(profile);
+      onImpersonate(profile);
+    } catch {
+      setError("Failed to impersonate profile");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-elevated border border-border rounded-2xl w-full max-w-sm p-6 shadow-xl">
+        <h2 className="text-base font-semibold text-primary mb-1">Impersonate</h2>
+        <p className="text-xs text-muted mb-4">Switch to another user's account</p>
+        {isLoading && <p className="text-sm text-muted text-center py-4">Loading…</p>}
+        {!isLoading && others.length === 0 && (
+          <p className="text-sm text-muted text-center py-4">No other profiles</p>
+        )}
+        <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+          {others.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handleSelect(p.id)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-hover transition-colors text-left"
+            >
+              <Avatar profile={p} size="sm" />
+              <span className="text-sm text-primary">{p.name}</span>
+            </button>
+          ))}
+        </div>
+        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+        <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl border border-border text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+          Cancel
+        </button>
       </div>
     </div>
   );

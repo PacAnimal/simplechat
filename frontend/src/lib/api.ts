@@ -67,7 +67,9 @@ export function modelLabel(
 }
 
 export const api = {
-  getConfig: () => req<{ can_create_profile: boolean; password_min_length: number; allow_switching_models: boolean }>("GET", "/config"),
+  getConfig: () => req<{ can_create_profile: boolean; password_min_length: number; allow_switching_models: boolean; admin: string }>("GET", "/config"),
+  impersonateProfile: (profileId: number) =>
+    req<{ token: string; profile: Profile }>("POST", `/profiles/${profileId}/impersonate`),
   // profiles (no auth required)
   listProfiles: () => req<Profile[]>("GET", "/profiles"),
   createProfile: (name: string, password: string, avatar: number) =>

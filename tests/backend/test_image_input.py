@@ -17,7 +17,7 @@ _FIXTURE_IMAGE = pathlib.Path(__file__).parent / "fixtures" / "object.png"
 
 async def _create_chat(client: AsyncClient, provider: str) -> int:
     model = "gpt-4o" if provider == "openai" else "claude-sonnet-4-6"
-    r = await client.post("/api/chats", json={"provider": provider, "model": model})
+    r = await client.post("/api/chats", json={"provider": provider, "model": model, "web_search_enabled": False})
     assert r.status_code == 201
     return r.json()["id"]
 

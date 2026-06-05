@@ -66,6 +66,26 @@ async def _normalize_stored_paths():
             logger.info("Normalized %d stored path(s) to filename", updated)
 
 
+async def _warn_missing_admin():
+    import logging
+
+    from sqlalchemy import func, select
+
+    from .models import Profile
+
+    logger = logging.getLogger(__name__)
+    async with SessionLocal() as db:
+        result = await db.execute(
+            select(Profile).where(func.lower(Profile.name) == settings.admin.lower())
+        )
+        if not result.scalar_one_or_none():
+            logger.warning(
+                "ADMIN is set to %r but no profile with that name exists — "
+                "impersonation will be unavailable until the account is created",
+                settings.admin,
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     data_dir = _db_dir()
@@ -77,6 +97,8 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.generated_dir, exist_ok=True)
     await run_migrations()
     await _normalize_stored_paths()
+    if settings.admin:
+        await _warn_missing_admin()
     try:
         await refresh_models()
     except Exception:

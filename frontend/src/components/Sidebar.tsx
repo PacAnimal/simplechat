@@ -18,6 +18,7 @@ interface Props {
   resourcesOpen: boolean;
   onLogout: () => void;
   onProfileUpdated: (profile: Profile) => void;
+  onImpersonate: (profile: Profile) => void;
   open: boolean;
   onClose: () => void;
 }
@@ -31,7 +32,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onOpenResources, resourcesOpen, onLogout, onProfileUpdated, open }: Props) {
+export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onOpenResources, resourcesOpen, onLogout, onProfileUpdated, onImpersonate, open }: Props) {
   const qc = useQueryClient();
   const { activeStreams, unreadChats } = useStream();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -293,6 +294,7 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
           profile={profile}
           onProfileUpdated={onProfileUpdated}
           onLogout={onLogout}
+          onImpersonate={onImpersonate}
         />
       </div>
     </aside>

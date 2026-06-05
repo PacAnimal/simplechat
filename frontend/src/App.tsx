@@ -48,6 +48,11 @@ export default function App() {
     setProfile(p);
   }
 
+  function handleImpersonate(p: Profile) {
+    setProfile(p);
+    setSelectedChatId(null);
+  }
+
   if (!profile) {
     return <ProfilePicker onLogin={handleLogin} />;
   }
@@ -84,6 +89,7 @@ export default function App() {
           resourcesOpen={resourcesOpen}
           onLogout={handleLogout}
           onProfileUpdated={handleProfileUpdated}
+          onImpersonate={handleImpersonate}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />

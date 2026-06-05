@@ -144,7 +144,7 @@ async def test_generated_image_ownership_enforced(
     _, tok_b = await _create_and_login(unauthed_client, "img_thief", "ThiefPass1")
 
     create_r = await client.post(
-        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+        "/api/chats", json={"provider": "openai", "model": "gpt-4o", "web_search_enabled": False}
     )
     assert create_r.status_code == 201
     chat_id = create_r.json()["id"]

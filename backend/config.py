@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     allow_switching_models: bool = True
     # mark chats as deleted instead of removing them from the database
     soft_delete: bool = False
+    # profile name that has admin privileges (impersonate); empty = disabled
+    admin: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

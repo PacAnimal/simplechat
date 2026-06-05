@@ -157,3 +157,18 @@ async def delete_profile(
     await db.delete(current)
     await db.commit()
     log_event(name, "delete_profile")
+
+
+@router.post("/{profile_id}/impersonate", response_model=LoginResponse)
+async def impersonate(
+    profile_id: int,
+    current: Profile = Depends(get_current_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    if not settings.admin or current.name.lower() != settings.admin.lower():
+        raise HTTPException(403, "Not authorized to impersonate")
+    target = await db.get(Profile, profile_id)
+    if not target:
+        raise HTTPException(404, "Profile not found")
+    log_event(current.name, "impersonate", target_id=target.id, target_name=target.name)
+    return LoginResponse(token=create_token(target.id), profile=ProfileRead.model_validate(target))
