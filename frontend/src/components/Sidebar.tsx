@@ -42,7 +42,7 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedQuery = useDebounce(searchQuery, 300);
 
-  const { data: chats = [] } = useQuery({
+  const { data: chats = [], isLoading: chatsLoading } = useQuery({
     queryKey: ["chats"],
     queryFn: api.listChats,
     refetchInterval: 15_000,
@@ -210,7 +210,19 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
 
       {/* chat list */}
       <nav className="flex-1 overflow-y-auto px-2 pb-4">
-        {chats.length === 0 ? (
+        {chatsLoading ? (
+          <div className="flex flex-col gap-1 pt-1 animate-pulse">
+            {[72, 56, 88, 64, 80].map((w, i) => (
+              <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg">
+                <div className="w-3.5 h-3.5 rounded bg-hover flex-shrink-0" />
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <div className="h-2.5 rounded bg-hover" style={{ width: `${w}%` }} />
+                  <div className="h-2 rounded bg-hover w-2/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : chats.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
             <MessageSquareIcon size={24} className="text-muted opacity-50" />
             <p className="text-muted text-xs">No chats yet</p>

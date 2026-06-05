@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
 import DatasetManager from "./components/DatasetManager";
@@ -10,6 +11,7 @@ import { StreamProvider } from "./lib/StreamContext";
 import type { Chat, Profile } from "./types";
 
 export default function App() {
+  const qc = useQueryClient();
   const [profile, setProfile] = useState<Profile | null>(() => getStoredProfile());
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -28,6 +30,7 @@ export default function App() {
   }, []);
 
   function handleLogin(p: Profile) {
+    qc.clear();
     setProfile(p);
     setSelectedChatId(null);
   }
@@ -49,6 +52,7 @@ export default function App() {
   }
 
   function handleImpersonate(p: Profile) {
+    qc.clear();
     setProfile(p);
     setSelectedChatId(null);
   }
