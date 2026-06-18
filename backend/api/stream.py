@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .. import model_registry, sse_events
+from .. import provider_access as pa
 from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
@@ -568,6 +569,10 @@ async def send_message(
 ):
     # verify ownership before acquiring lock — prevents lock leak on 404
     chat = await get_owned_chat(chat_id, profile.id, db)
+
+    access = await pa.get_profile_access(profile, db)
+    if not access.get(chat.provider, True):
+        raise HTTPException(403, f"Access to {chat.provider} is disabled for your account")
 
     if not settings.stub_providers:
         _check_provider_configured(chat.provider)

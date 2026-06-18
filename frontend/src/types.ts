@@ -92,6 +92,26 @@ export interface ToolCallRecord {
   sources?: string[];
 }
 
+export interface ProviderAccess {
+  openai: boolean;
+  anthropic: boolean;
+  ollama: boolean;
+}
+
+export interface UserProviderAccess {
+  id: number;
+  name: string;
+  avatar: number;
+  avatar_color: string | null;
+  provider_access: ProviderAccess | null;
+  effective_access: ProviderAccess;
+}
+
+export interface ProviderAccessData {
+  defaults: ProviderAccess;
+  users: UserProviderAccess[];
+}
+
 export const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",

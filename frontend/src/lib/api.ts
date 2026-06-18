@@ -1,4 +1,4 @@
-import type { Attachment, Chat, Dataset, DatasetFile, Message, MessageSearchResult, Profile, StreamEvent } from "../types";
+import type { Attachment, Chat, Dataset, DatasetFile, Message, MessageSearchResult, Profile, ProviderAccess, ProviderAccessData, StreamEvent } from "../types";
 
 const BASE = "/api";
 const TOKEN_KEY = "simplechat_token";
@@ -70,6 +70,14 @@ export const api = {
   getConfig: () => req<{ can_create_profile: boolean; password_min_length: number; allow_switching_models: boolean; admin: string }>("GET", "/config"),
   impersonateProfile: (profileId: number) =>
     req<{ token: string; profile: Profile }>("POST", `/profiles/${profileId}/impersonate`),
+  // admin
+  getProviderAccess: () => req<ProviderAccessData>("GET", "/admin/provider-access"),
+  updateProviderDefaults: (access: ProviderAccess) =>
+    req<void>("PUT", "/admin/provider-access/defaults", access),
+  updateUserProviderAccess: (profileId: number, access: ProviderAccess) =>
+    req<void>("PUT", `/admin/provider-access/${profileId}`, access),
+  resetUserProviderAccess: (profileId: number) =>
+    req<void>("DELETE", `/admin/provider-access/${profileId}`),
   // profiles (no auth required)
   listProfiles: () => req<Profile[]>("GET", "/profiles"),
   createProfile: (name: string, password: string, avatar: number) =>

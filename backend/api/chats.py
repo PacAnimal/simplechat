@@ -5,6 +5,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from .. import provider_access as pa
 from ..auth import get_current_profile
 from ..config import settings
 from ..database import get_db
@@ -87,6 +88,9 @@ async def create_chat(
     profile: Profile = Depends(get_current_profile),
     db: AsyncSession = Depends(get_db),
 ):
+    access = await pa.get_profile_access(profile, db)
+    if not access.get(body.provider, True):
+        raise HTTPException(403, f"Access to {body.provider} is disabled for your account")
     key_attr = _PROVIDER_KEY_ATTRS.get(body.provider)
     if (
         key_attr
@@ -157,6 +161,9 @@ async def update_chat(
             raise HTTPException(
                 status_code=403, detail="Switching models is disabled on this server"
             )
+        access = await pa.get_profile_access(profile, db)
+        if not access.get(body.provider, True):
+            raise HTTPException(403, f"Access to {body.provider} is disabled for your account")
         chat.provider = body.provider
     if "dataset_id" in body.model_fields_set:
         if body.dataset_id is not None:

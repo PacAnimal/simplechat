@@ -39,6 +39,13 @@ class UTCDateTime(TypeDecorator):
         return value
 
 
+class SystemConfig(Base):
+    __tablename__ = "system_config"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False)
+
+
 class Profile(Base):
     __tablename__ = "profiles"
 
@@ -49,6 +56,7 @@ class Profile(Base):
     avatar_color = Column(String(20), nullable=True)
     created_at = Column(UTCDateTime, default=utcnow)
     token_invalidated_at = Column(UTCDateTime, nullable=True)
+    provider_access = Column(Text, nullable=True)  # JSON {openai,anthropic,ollama}; null = use system default
 
     chats = relationship("Chat", back_populates="profile", cascade="all, delete-orphan")
     datasets = relationship("Dataset", back_populates="profile", cascade="all, delete-orphan")

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Settings2Icon, LogOutIcon, UserCircleIcon, KeyRoundIcon, PencilIcon, UsersIcon } from "lucide-react";
+import { createPortal } from "react-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Settings2Icon, LogOutIcon, UserCircleIcon, KeyRoundIcon, PencilIcon, UsersIcon, ShieldIcon } from "lucide-react";
 import { api, setToken, storeProfile } from "../lib/api";
-import type { Profile } from "../types";
+import type { Profile, ProviderAccess, UserProviderAccess } from "../types";
 import { AVATARS } from "../types";
 import { Avatar } from "./ProfilePicker";
 import { cn } from "../lib/utils";
@@ -39,23 +40,23 @@ const COLOR_SWATCHES = [
 
 export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogout, onImpersonate }: Props) {
   const [open, setOpen] = useState(false);
-  const [panel, setPanel] = useState<"avatar" | "password" | "name" | "impersonate" | null>(null);
+  const [panel, setPanel] = useState<"avatar" | "password" | "name" | "impersonate" | "provider-access" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.getConfig });
   const minLen = config?.password_min_length ?? 8;
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      if (panel !== null) return; // panels manage their own close buttons
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setPanel(null);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [panel]);
 
-  function handleOpenPanel(p: "avatar" | "password" | "name" | "impersonate") {
+  function handleOpenPanel(p: "avatar" | "password" | "name" | "impersonate" | "provider-access") {
     setPanel(p);
     setOpen(false);
   }
@@ -80,6 +81,7 @@ export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogou
             <>
               <div className="mx-2 border-t border-border my-1" />
               <MenuItem icon={<UsersIcon size={14} />} label="Impersonate…" onClick={() => handleOpenPanel("impersonate")} />
+              <MenuItem icon={<ShieldIcon size={14} />} label="Provider access…" onClick={() => handleOpenPanel("provider-access")} testId="provider-access-button" />
             </>
           )}
           <div className="mx-2 border-t border-border my-1" />
@@ -118,14 +120,19 @@ export default function ProfileSettingsMenu({ profile, onProfileUpdated, onLogou
           onClose={() => setPanel(null)}
         />
       )}
+
+      {panel === "provider-access" && (
+        <ProviderAccessPanel onClose={() => setPanel(null)} />
+      )}
     </div>
   );
 }
 
-function MenuItem({ icon, label, onClick, danger = false }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+function MenuItem({ icon, label, onClick, danger = false, testId }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; testId?: string }) {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
       className={cn(
         "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
         danger ? "text-red-400 hover:bg-red-500/10" : "text-secondary hover:bg-hover hover:text-primary",
@@ -286,6 +293,190 @@ function NamePanel({ profile, onUpdated, onClose }: { profile: Profile; onUpdate
         </form>
       </div>
     </div>
+  );
+}
+
+const PROVIDERS: { key: keyof ProviderAccess; label: string }[] = [
+  { key: "openai", label: "OpenAI" },
+  { key: "anthropic", label: "Anthropic" },
+  { key: "ollama", label: "Ollama" },
+];
+
+function ProviderToggle({ enabled, onChange, testId }: { enabled: boolean; onChange: () => void; testId?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={onChange}
+      data-testid={testId}
+      className={cn(
+        "relative h-6 w-10 flex-shrink-0 rounded-full transition-colors duration-200",
+        enabled ? "bg-accent" : "bg-muted/40",
+      )}
+    >
+      <span className={cn(
+        "absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200",
+        enabled ? "translate-x-4" : "translate-x-0",
+      )} />
+    </button>
+  );
+}
+
+function ProviderAccessPanel({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-provider-access"],
+    queryFn: api.getProviderAccess,
+  });
+
+  // local optimistic state; null value = user has been reset to defaults
+  const [localDefaults, setLocalDefaults] = useState<ProviderAccess | null>(null);
+  const [localUsers, setLocalUsers] = useState<Map<number, ProviderAccess | null>>(new Map());
+
+  useEffect(() => {
+    if (data && !localDefaults) setLocalDefaults(data.defaults);
+  }, [data, localDefaults]);
+
+  const defaults = localDefaults ?? data?.defaults;
+
+  function isOnDefault(u: UserProviderAccess): boolean {
+    if (localUsers.has(u.id)) return localUsers.get(u.id) === null;
+    return u.provider_access === null;
+  }
+
+  function effectiveForUser(u: UserProviderAccess): ProviderAccess {
+    const local = localUsers.get(u.id);
+    if (local === null) return defaults ?? u.effective_access;
+    return local ?? u.effective_access;
+  }
+
+  async function toggleDefault(key: keyof ProviderAccess) {
+    if (!defaults) return;
+    const next = { ...defaults, [key]: !defaults[key] };
+    setLocalDefaults(next);
+    try {
+      await api.updateProviderDefaults(next);
+      queryClient.invalidateQueries({ queryKey: ["admin-provider-access"] });
+    } catch {
+      setLocalDefaults(defaults);
+    }
+  }
+
+  async function toggleUser(u: UserProviderAccess, key: keyof ProviderAccess) {
+    if (!defaults) return;
+    const current = effectiveForUser(u);
+    const next = { ...current, [key]: !current[key] };
+    setLocalUsers((m) => new Map(m).set(u.id, next));
+    try {
+      await api.updateUserProviderAccess(u.id, next);
+      queryClient.invalidateQueries({ queryKey: ["admin-provider-access"] });
+    } catch {
+      setLocalUsers((m) => { const mm = new Map(m); mm.delete(u.id); return mm; });
+    }
+  }
+
+  async function resetUser(u: UserProviderAccess) {
+    setLocalUsers((m) => new Map(m).set(u.id, null));
+    try {
+      await api.resetUserProviderAccess(u.id);
+      queryClient.invalidateQueries({ queryKey: ["admin-provider-access"] });
+    } catch {
+      setLocalUsers((m) => { const mm = new Map(m); mm.delete(u.id); return mm; });
+    }
+  }
+
+  const users = data?.users ?? [];
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
+      <div data-testid="provider-access-panel" className="bg-elevated border border-border rounded-2xl w-full max-w-3xl p-6 shadow-xl flex flex-col max-h-[85vh]">
+        <h2 className="text-base font-semibold text-primary mb-1">Provider access</h2>
+        <p className="text-xs text-muted mb-4">Control which AI providers each user can access</p>
+
+        {isLoading && <p className="text-sm text-muted text-center py-6">Loading…</p>}
+
+        {!isLoading && (
+          <div className="overflow-auto flex-1 -mx-1 px-1">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left text-xs text-muted font-medium pb-2 pr-4">User</th>
+                  {PROVIDERS.map((p) => (
+                    <th key={p.key} className="text-center text-xs text-muted font-medium pb-2 px-3 w-24">{p.label}</th>
+                  ))}
+                  <th className="w-14" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {/* default row */}
+                {defaults && (
+                  <tr>
+                    <td className="py-2.5 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/15 text-accent">default</span>
+                        <span className="text-xs text-muted">New users inherit these</span>
+                      </div>
+                    </td>
+                    {PROVIDERS.map((p) => (
+                      <td key={p.key} className="py-2.5 px-3 text-center">
+                        <div className="flex justify-center">
+                          <ProviderToggle enabled={defaults[p.key]} onChange={() => toggleDefault(p.key)} testId={`toggle-default-${p.key}`} />
+                        </div>
+                      </td>
+                    ))}
+                    <td />
+                  </tr>
+                )}
+                {/* per-user rows */}
+                {users.map((u) => {
+                  const effective = effectiveForUser(u);
+                  const onDefault = isOnDefault(u);
+                  return (
+                    <tr key={u.id}>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <Avatar profile={u as unknown as Profile} size="sm" />
+                          <span className="text-primary">{u.name}</span>
+                          {onDefault && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted/20 text-muted">default</span>
+                          )}
+                        </div>
+                      </td>
+                      {PROVIDERS.map((p) => (
+                        <td key={p.key} className="py-2.5 px-3 text-center">
+                          <div className="flex justify-center">
+                            <ProviderToggle enabled={effective[p.key]} onChange={() => toggleUser(u, p.key)} testId={`toggle-user-${u.id}-${p.key}`} />
+                          </div>
+                        </td>
+                      ))}
+                      <td className="py-2.5 pl-2 text-right">
+                        {!onDefault && (
+                          <button
+                            type="button"
+                            onClick={() => resetUser(u)}
+                            className="text-[11px] text-muted hover:text-primary transition-colors"
+                          >
+                            reset
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-4 pt-3 border-t border-border flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-border text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

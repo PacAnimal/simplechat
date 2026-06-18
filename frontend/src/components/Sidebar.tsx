@@ -14,6 +14,7 @@ interface Props {
   selectedChatId: number | null;
   onSelectChat: (id: number | null) => void;
   onNewChat: () => void;
+  canNewChat?: boolean;
   onOpenResources: () => void;
   resourcesOpen: boolean;
   onLogout: () => void;
@@ -32,7 +33,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, onOpenResources, resourcesOpen, onLogout, onProfileUpdated, onImpersonate, open }: Props) {
+export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewChat, canNewChat = true, onOpenResources, resourcesOpen, onLogout, onProfileUpdated, onImpersonate, open }: Props) {
   const qc = useQueryClient();
   const { activeStreams, unreadChats } = useStream();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -150,7 +151,8 @@ export default function Sidebar({ profile, selectedChatId, onSelectChat, onNewCh
           </button>
           <button
             onClick={onNewChat}
-            className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors"
+            disabled={!canNewChat}
+            className="p-1.5 rounded-lg hover:bg-hover text-muted hover:text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted"
             title="New chat"
             data-testid="new-chat-button"
           >

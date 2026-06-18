@@ -16,6 +16,7 @@ from ..models import (
     GeneratedImage,
     Message,
     Profile,
+    SystemConfig,
 )
 
 router = APIRouter(prefix="/test", tags=["test"])
@@ -40,6 +41,7 @@ async def reset_db(
     await db.execute(delete(DatasetFile))
     await db.execute(delete(Dataset))
     await db.execute(delete(Profile))
+    await db.execute(delete(SystemConfig))
     await db.commit()
 
     uploads_real = os.path.realpath(settings.uploads_dir)

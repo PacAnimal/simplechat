@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 
 from ..config import settings
+from .admin import router as admin_router
 from .chats import router as chats_router
 from .datasets import router as datasets_router
 from .files import router as files_router
@@ -11,6 +12,7 @@ from .profiles import router as profiles_router
 from .stream import router as stream_router
 
 router = APIRouter(prefix="/api")
+router.include_router(admin_router)
 router.include_router(profiles_router)
 router.include_router(chats_router)
 router.include_router(stream_router)
