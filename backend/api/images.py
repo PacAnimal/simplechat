@@ -22,9 +22,6 @@ async def serve_generated_image(
     authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
-        raise HTTPException(404)
-
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
     raw_token = authorization[7:]
@@ -34,6 +31,20 @@ async def serve_generated_image(
         profile_id = int(payload["sub"])
     except (PyJWTError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return await serve_for_profile(filename, profile_id, db)
+
+
+async def serve_for_profile(
+    filename: str, profile_id: int, db: AsyncSession
+) -> FileResponse:
+    """Serve a generated image, but only to the profile whose chat produced it.
+
+    Split out from the route so callers that establish the profile some other way — the remote-control
+    surface — get the same ownership check rather than a second copy of it.
+    """
+    if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(404)
 
     full_path = os.path.join(settings.generated_dir, filename)
     if not os.path.exists(full_path):

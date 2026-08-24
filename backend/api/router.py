@@ -9,6 +9,7 @@ from .images import router as images_router
 from .models import router as models_router
 from .profiles import _can_create
 from .profiles import router as profiles_router
+from .remote import router as remote_router
 from .stream import router as stream_router
 
 router = APIRouter(prefix="/api")
@@ -20,6 +21,7 @@ router.include_router(files_router)
 router.include_router(models_router)
 router.include_router(images_router)
 router.include_router(datasets_router)
+router.include_router(remote_router)
 
 
 @router.get("/config")

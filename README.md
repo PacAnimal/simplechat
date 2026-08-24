@@ -98,6 +98,41 @@ The Dockerfile is a two-stage build: the first stage compiles the React frontend
 | `OLLAMA_SYSTEM_PROMPT` | *(none)* | System prompt prepended to every Ollama request. Useful for overriding a model's built-in guard template. Example: `You are a helpful assistant. Answer directly without disclaimers.` |
 | `IMAGE_MODEL` | `gpt-image-2` | OpenAI model used for image generation. |
 | `ALLOW_SWITCHING_MODELS` | `true` | Set to `false` to hide the model switcher and prevent users from changing models on existing chats. |
+| `REMOTE_CONTROL_SHARED_SECRET` | *(none)* | Shared secret enabling `/api/remote/*`, the surface a trusted server uses to act on a profile's behalf. Unset, the whole namespace answers 503. See **Remote control** below. |
+
+---
+
+## Remote control
+
+Another server you trust can drive SimpleChat on its users' behalf — a companion app, a kiosk, a home
+dashboard. Set `REMOTE_CONTROL_SHARED_SECRET` to enable it; leave it unset and every route below
+answers `503`, so a server nobody configured for this never accepts it by accident.
+
+Requests carry the secret in an `X-Remote-Control-Secret` header (compared in constant time). It is
+deliberately not an `Authorization` scheme: this is one server vouching for itself, not a user logging
+in, and keeping it off `Authorization` stops a proxy or client library treating it as a credential to
+refresh.
+
+The surface is **contained** — everything the remote system needs lives under `/api/remote/`, and the
+user it acts as is named in the path. No token is handed out and no other part of the API is involved.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/remote/profiles` | Every user, name-sorted — what the remote system offers for selection. |
+| `GET /api/remote/profiles/{id}/models` | The models that user may use. |
+| `GET /api/remote/profiles/{id}/chats` | That user's chats. |
+| `POST /api/remote/profiles/{id}/chats` | Start one. |
+| `GET·PATCH·DELETE /api/remote/profiles/{id}/chats/{chat}` | Read, rename or re-model, remove. |
+| `GET /api/remote/profiles/{id}/chats/{chat}/messages` | The conversation so far. |
+| `POST /api/remote/profiles/{id}/chats/{chat}/messages` | Send, and stream the reply back as SSE. |
+| `GET /api/remote/profiles/{id}/generated/{filename}` | An image that user's chats produced. |
+
+Each route hands the named user to the very handler the web app's own route uses, so there is one
+implementation of listing a chat or sending a message rather than two that can drift apart. Naming a
+user in the path grants nothing extra: a chat belonging to someone else is still a `404`.
+
+The secret is equivalent to every password on the server: anything holding it can act as any user. Keep
+it server-side, and only give it to a server on a network you control.
 
 ---
 

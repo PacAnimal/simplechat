@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     soft_delete: bool = False
     # profile name that has admin privileges (impersonate); empty = disabled
     admin: str = ""
+    # shared secret a trusted remote system presents to /api/remote/*; empty = the whole surface is off
+    remote_control_shared_secret: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
