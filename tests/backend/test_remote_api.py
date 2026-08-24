@@ -40,6 +40,24 @@ async def _chat(c: AsyncClient, profile_id: int) -> int:
     return r.json()["id"]
 
 
+async def _deny(c: AsyncClient, profile_id: int, provider: str) -> None:
+    """Turn a provider off for one profile, the way the admin screen does."""
+    from sqlalchemy import select
+
+    from backend.models import Profile
+
+    from .conftest import TestSession
+
+    async with TestSession() as db:
+        profile = (
+            await db.execute(select(Profile).where(Profile.id == profile_id))
+        ).scalar_one()
+        access = {"openai": True, "anthropic": True, "ollama": True}
+        access[provider] = False
+        profile.provider_access = json.dumps(access)
+        await db.commit()
+
+
 async def _collect_sse(response) -> list[dict]:
     return [
         json.loads(line[6:])
@@ -165,6 +183,52 @@ async def test_models_are_listed_for_the_user(
     assert isinstance(r.json(), dict)
 
 
+# The remote surface must not be a way round a restriction set on the account. A provider turned off
+# for this user is absent from their model list here exactly as it is in the web app, and a chat asking
+# for it is refused — otherwise "no OpenAI for this user" would hold in one client and not the other.
+async def test_models_omit_a_provider_this_user_may_not_use(
+    unauthed_client: AsyncClient, remote_enabled
+):
+    pid = await _register(unauthed_client, "restricted")
+    await _deny(unauthed_client, pid, "openai")
+
+    models = (
+        await unauthed_client.get(f"/api/remote/profiles/{pid}/models", headers=AUTH)
+    ).json()
+    assert "openai" not in models
+    assert "anthropic" in models
+
+
+async def test_cannot_start_a_chat_on_a_denied_provider(
+    unauthed_client: AsyncClient, remote_enabled
+):
+    pid = await _register(unauthed_client, "restricted")
+    await _deny(unauthed_client, pid, "openai")
+
+    r = await unauthed_client.post(
+        f"/api/remote/profiles/{pid}/chats",
+        json={"provider": "openai", "model": "gpt-4o"},
+        headers=AUTH,
+    )
+    assert r.status_code == 403, r.text
+
+
+async def test_a_denial_added_later_stops_an_existing_chat(
+    unauthed_client: AsyncClient, remote_enabled
+):
+    """Access is read per request, so revoking a provider reaches conversations already started on it."""
+    pid = await _register(unauthed_client, "restricted")
+    chat_id = await _chat(unauthed_client, pid)
+    await _deny(unauthed_client, pid, "openai")
+
+    r = await unauthed_client.post(
+        f"/api/remote/profiles/{pid}/chats/{chat_id}/messages",
+        json={"content": "hi"},
+        headers=AUTH,
+    )
+    assert r.status_code == 403, r.text
+
+
 async def test_send_streams_the_reply_and_persists_it(
     unauthed_client: AsyncClient, remote_enabled
 ):
@@ -196,6 +260,35 @@ async def test_send_streams_the_reply_and_persists_it(
         ("user", "Say hello"),
         ("assistant", "Hello world!"),
     ]
+
+
+async def test_a_generated_image_is_actually_served(
+    unauthed_client: AsyncClient, remote_enabled
+):
+    """The success path, which the 404 test below does not cover — and which is the whole point."""
+    import os
+
+    from backend.config import settings
+    from backend.models import GeneratedImage
+
+    from .conftest import TestSession
+
+    pid = await _register(unauthed_client, "someone")
+    chat_id = await _chat(unauthed_client, pid)
+
+    filename = "img_test.png"
+    os.makedirs(settings.generated_dir, exist_ok=True)
+    with open(os.path.join(settings.generated_dir, filename), "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n-pretend-this-is-a-whale")
+    async with TestSession() as db:
+        db.add(GeneratedImage(chat_id=chat_id, prompt="a whale", path=filename))
+        await db.commit()
+
+    r = await unauthed_client.get(
+        f"/api/remote/profiles/{pid}/generated/{filename}", headers=AUTH
+    )
+    assert r.status_code == 200, r.text
+    assert r.content.startswith(b"\x89PNG")
 
 
 async def test_generated_image_of_another_user_is_404(
