@@ -8,6 +8,6 @@
     "test:integration:ui": "playwright test --config playwright.integration.config.ts --ui"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.63.0"
   }
 }

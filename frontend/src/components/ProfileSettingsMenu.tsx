@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings2Icon, LogOutIcon, UserCircleIcon, KeyRoundIcon, PencilIcon, UsersIcon, ShieldIcon } from "lucide-react";
 import { api, setToken, storeProfile } from "../lib/api";
 import type { Profile, ProviderAccess, UserProviderAccess } from "../types";
@@ -333,10 +333,6 @@ function ProviderAccessPanel({ onClose }: { onClose: () => void }) {
   // local optimistic state; null value = user has been reset to defaults
   const [localDefaults, setLocalDefaults] = useState<ProviderAccess | null>(null);
   const [localUsers, setLocalUsers] = useState<Map<number, ProviderAccess | null>>(new Map());
-
-  useEffect(() => {
-    if (data && !localDefaults) setLocalDefaults(data.defaults);
-  }, [data, localDefaults]);
 
   const defaults = localDefaults ?? data?.defaults;
 
