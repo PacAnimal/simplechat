@@ -8,8 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("Anthropic generates image when asked and it appears inline", async ({ page }) => {
-  // use claude-sonnet to ensure reliable tool use
-  await createChat(page, "anthropic", "claude-sonnet-4-6");
+  await createChat(page, "anthropic", "chat");
   await sendMessage(page, "Please generate an image of a red apple on a white background", 90_000);
 
   const img = page.locator('[data-testid="message-assistant"] [data-testid="generated-image"]').first();
@@ -21,7 +20,7 @@ test("Anthropic generates image when asked and it appears inline", async ({ page
 });
 
 test("clicking inline image opens lightbox with overlay and close button", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-sonnet-4-6");
+  await createChat(page, "anthropic", "chat");
   await sendMessage(page, "Generate an image of a blue circle on a white background", 90_000);
 
   const img = page.locator('[data-testid="message-assistant"] [data-testid="generated-image"]').first();
@@ -44,7 +43,7 @@ test("clicking inline image opens lightbox with overlay and close button", async
 });
 
 test("clicking overlay outside image closes the lightbox", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-sonnet-4-6");
+  await createChat(page, "anthropic", "chat");
   await sendMessage(page, "Generate an image of a green triangle", 90_000);
 
   const img = page.locator('[data-testid="message-assistant"] [data-testid="generated-image"]').first();
@@ -60,7 +59,7 @@ test("clicking overlay outside image closes the lightbox", async ({ page }) => {
 });
 
 test("OpenAI generates image inline and lightbox works", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
   await sendMessage(page, "Please generate an image of a simple sun", 90_000);
 
   const img = page.locator('[data-testid="message-assistant"] [data-testid="generated-image"]').first();
@@ -74,7 +73,7 @@ test("OpenAI generates image inline and lightbox works", async ({ page }) => {
 });
 
 test("image iteration: office cubicle scene then pink suit modification produces a new pink image", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o");
+  await createChat(page, "openai", "chat");
 
   // step 1: generate the initial office scene
   await sendMessage(

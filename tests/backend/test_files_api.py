@@ -42,7 +42,7 @@ async def test_list_chats_requires_auth(unauthed_client: AsyncClient):
 
 async def test_create_chat_requires_auth(unauthed_client: AsyncClient):
     r = await unauthed_client.post(
-        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+        "/api/chats", json={"provider": "openai", "model": "chat"}
     )
     assert r.status_code == 401
 
@@ -67,7 +67,7 @@ async def test_bogus_token_rejected_on_upload(unauthed_client: AsyncClient):
 
 
 async def _create_chat(client: AsyncClient) -> int:
-    r = await client.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r = await client.post("/api/chats", json={"provider": "openai", "model": "chat"})
     return r.json()["id"]
 
 

@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("OpenAI web search finds Norwegian car dealers near Oslo", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
   const chatId = await getLastChatId(page);
   await enableWebSearch(page, chatId);
 
@@ -51,7 +51,7 @@ test("OpenAI web search finds Norwegian car dealers near Oslo", async ({ page })
 });
 
 test("Anthropic web search finds Norwegian car dealers near Oslo", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
   const chatId = await getLastChatId(page);
   await enableWebSearch(page, chatId);
 
@@ -71,7 +71,7 @@ test("Anthropic web search finds Norwegian car dealers near Oslo", async ({ page
 });
 
 test("OpenAI web search shows source domain chips", async ({ page }) => {
-  await createChat(page, "openai", "gpt-5");
+  await createChat(page, "openai", "thinking");
   const chatId = await getLastChatId(page);
   await enableWebSearch(page, chatId);
 
@@ -93,7 +93,7 @@ test("OpenAI web search shows source domain chips", async ({ page }) => {
 });
 
 test("Anthropic web search shows source domain chips", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
   const chatId = await getLastChatId(page);
   await enableWebSearch(page, chatId);
 
@@ -112,8 +112,8 @@ test("Anthropic web search shows source domain chips", async ({ page }) => {
     .waitFor({ state: "visible", timeout: 120_000 });
 });
 
-test("gpt-5 web search returns a response for a specific legal citation query", async ({ page }) => {
-  await createChat(page, "openai", "gpt-5");
+test("OpenAI thinking tier web search returns a response for a specific legal citation query", async ({ page }) => {
+  await createChat(page, "openai", "thinking");
   const chatId = await getLastChatId(page);
   await enableWebSearch(page, chatId);
 
@@ -136,7 +136,7 @@ test("gpt-5 web search returns a response for a specific legal citation query", 
 });
 
 test("web search toggle can be turned on from UI and triggers search indicator", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
 
   // enable via toggle button
   const toggle = page.getByTestId("web-search-toggle");

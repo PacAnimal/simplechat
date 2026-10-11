@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("OpenAI reads password from uploaded text file", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
   await uploadTextFile(page, SECRET_FILE, SECRET_CONTENT);
 
   await sendMessage(page, "What is the password mentioned in the attached file? Reply with just the password word.", 60_000);
@@ -21,7 +21,7 @@ test("OpenAI reads password from uploaded text file", async ({ page }) => {
 });
 
 test("Anthropic reads password from uploaded text file", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
   await uploadTextFile(page, SECRET_FILE, SECRET_CONTENT);
 
   await sendMessage(page, "What is the password mentioned in the attached file? Reply with just the password word.", 60_000);
@@ -31,7 +31,7 @@ test("Anthropic reads password from uploaded text file", async ({ page }) => {
 });
 
 test("attachment chip appears after upload", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
 
   const input = page.locator('input[type="file"]');
   await input.setInputFiles({
@@ -46,7 +46,7 @@ test("attachment chip appears after upload", async ({ page }) => {
 });
 
 test("OpenAI analyzes uploaded CSV — finds highest-revenue product", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
 
   const csv = [
     "product,units_sold,revenue",
@@ -67,7 +67,7 @@ test("OpenAI analyzes uploaded CSV — finds highest-revenue product", async ({ 
 });
 
 test("Anthropic analyzes uploaded CSV — finds hottest city", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
 
   const csv = [
     "city,temperature_celsius",
@@ -89,7 +89,7 @@ test("Anthropic analyzes uploaded CSV — finds hottest city", async ({ page }) 
 });
 
 test("OpenAI reads CEO name from uploaded JSON file", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
 
   const json = JSON.stringify({
     company: "Acme Corp",
@@ -110,7 +110,7 @@ test("OpenAI reads CEO name from uploaded JSON file", async ({ page }) => {
 });
 
 test("Anthropic reads CEO name from uploaded JSON file", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
 
   const json = JSON.stringify({
     company: "Globex",

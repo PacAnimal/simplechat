@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import jwt
@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 
 def _make_token(profile_id: int, secret: str, *, delta_days: int = 1) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(profile_id),
         "iat": int(now.timestamp()),
@@ -144,7 +144,7 @@ async def test_generated_image_ownership_enforced(
     _, tok_b = await _create_and_login(unauthed_client, "img_thief", "ThiefPass1")
 
     create_r = await client.post(
-        "/api/chats", json={"provider": "openai", "model": "gpt-4o", "web_search_enabled": False}
+        "/api/chats", json={"provider": "openai", "model": "chat", "web_search_enabled": False}
     )
     assert create_r.status_code == 201
     chat_id = create_r.json()["id"]

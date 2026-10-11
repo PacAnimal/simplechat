@@ -158,19 +158,19 @@ def test_log_format(uvicorn_proc):
 
 
 def test_startup_logs_available_models(uvicorn_proc):
-    """On startup, one log line per configured provider lists model IDs alphabetically."""
+    """On startup, one log line per configured cloud provider lists the real model behind each tier."""
     _base_url, proc = uvicorn_proc
     proc.terminate()
     stdout, stderr = proc.communicate(timeout=10)
     output = (stdout + stderr).decode(errors="replace")
 
-    # uvicorn_proc sets both OPENAI_API_KEY and ANTHROPIC_API_KEY,
-    # so both providers are configured; each must produce an "all" and an "available" line
+    # uvicorn_proc sets both OPENAI_API_KEY and ANTHROPIC_API_KEY, so both providers are configured
     lines = output.splitlines()
-    assert any("OpenAI models:" in line for line in lines), f"missing OpenAI models line:\n{output}"
-    assert any("OpenAI available models:" in line for line in lines), f"missing OpenAI available models line:\n{output}"
-    assert any("Anthropic models:" in line for line in lines), f"missing Anthropic models line:\n{output}"
-    assert any("Anthropic available models:" in line for line in lines), f"missing Anthropic available models line:\n{output}"
+    for provider in ("OpenAI", "Anthropic"):
+        tier_lines = [line for line in lines if f"{provider} models:" in line]
+        assert tier_lines, f"missing {provider} models line:\n{output}"
+        for tier in ("task=", "chat=", "thinking="):
+            assert tier in tier_lines[0], f"{provider} models line lacks {tier}:\n{output}"
 
 
 def test_startup_logs_unconfigured_provider():

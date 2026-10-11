@@ -32,16 +32,14 @@ test("created chat appears in sidebar", async ({ page }) => {
   await expect(page.locator('[data-testid^="chat-item-"]').first()).toBeVisible({ timeout: 5000 });
 });
 
-test("switching provider updates model list", async ({ page }) => {
+test("each cloud provider offers the chat and thinking tiers", async ({ page }) => {
   await page.getByTestId("new-chat-button").click();
 
-  await page.getByTestId("provider-openai").click();
-  const opts1 = await page.getByTestId("model-select").locator("option").allTextContents();
-  expect(opts1.some((o) => o.toLowerCase().includes("gpt"))).toBe(true);
-
-  await page.getByTestId("provider-anthropic").click();
-  const opts2 = await page.getByTestId("model-select").locator("option").allTextContents();
-  expect(opts2.some((o) => o.includes("Claude"))).toBe(true);
+  for (const provider of ["openai", "anthropic"]) {
+    await page.getByTestId(`provider-${provider}`).click();
+    const opts = await page.getByTestId("model-select").locator("option").allTextContents();
+    expect(opts).toEqual(["Chat", "Thinking"]);
+  }
 });
 
 test("can create multiple chats and they all appear in sidebar", async ({ page }) => {

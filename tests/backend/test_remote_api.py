@@ -33,7 +33,7 @@ async def _register(c: AsyncClient, name: str) -> int:
 async def _chat(c: AsyncClient, profile_id: int) -> int:
     r = await c.post(
         f"/api/remote/profiles/{profile_id}/chats",
-        json={"provider": "openai", "model": "gpt-4o", "web_search_enabled": False},
+        json={"provider": "openai", "model": "chat", "web_search_enabled": False},
         headers=AUTH,
     )
     assert r.status_code == 201, r.text
@@ -207,7 +207,7 @@ async def test_cannot_start_a_chat_on_a_denied_provider(
 
     r = await unauthed_client.post(
         f"/api/remote/profiles/{pid}/chats",
-        json={"provider": "openai", "model": "gpt-4o"},
+        json={"provider": "openai", "model": "chat"},
         headers=AUTH,
     )
     assert r.status_code == 403, r.text

@@ -7,16 +7,16 @@ test.beforeEach(async ({ page }) => {
   await loginWithTestProfile(page);
 });
 
-test("basic chat works with OpenAI gpt-4o-mini", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+test("basic chat works with OpenAI chat tier", async ({ page }) => {
+  await createChat(page, "openai", "chat");
   await sendMessage(page, "Reply with just the word: pineapple");
 
   const reply = page.locator('[data-testid="message-assistant"]').first();
   await expect(reply).toContainText("pineapple", { ignoreCase: true });
 });
 
-test("basic chat works with Anthropic claude-haiku", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+test("basic chat works with Anthropic chat tier", async ({ page }) => {
+  await createChat(page, "anthropic", "chat");
   await sendMessage(page, "Reply with just the word: watermelon");
 
   const reply = page.locator('[data-testid="message-assistant"]').first();
@@ -24,7 +24,7 @@ test("basic chat works with Anthropic claude-haiku", async ({ page }) => {
 });
 
 test("streaming response appears word by word (content grows progressively)", async ({ page }) => {
-  await createChat(page, "openai", "gpt-4o-mini");
+  await createChat(page, "openai", "chat");
 
   await page.getByTestId("message-input").fill("Count slowly from 1 to 10, one number per line.");
   await page.getByTestId("send-button").click();
@@ -47,33 +47,17 @@ test("streaming response appears word by word (content grows progressively)", as
   await page.locator('[data-testid="message-assistant"]').waitFor({ state: "visible", timeout: 60_000 });
 });
 
-test("model list is fetched from server and shows OpenAI chat models", async ({ page }) => {
+test("model list offers only the chat and thinking tiers, never real model names", async ({ page }) => {
   await page.getByTestId("new-chat-button").click();
-  await page.getByTestId("provider-openai").click();
-
-  const select = page.getByTestId("model-select");
-  const options = await select.locator("option").allTextContents();
-  expect(options.length).toBeGreaterThanOrEqual(2);
-  // all options should be chat model IDs
-  for (const opt of options) {
-    expect(opt.toLowerCase()).toMatch(/gpt|^o[0-9]/);
-  }
-});
-
-test("model list shows Anthropic Claude models", async ({ page }) => {
-  await page.getByTestId("new-chat-button").click();
-  await page.getByTestId("provider-anthropic").click();
-
-  const select = page.getByTestId("model-select");
-  const options = await select.locator("option").allTextContents();
-  expect(options.length).toBeGreaterThanOrEqual(1);
-  for (const opt of options) {
-    expect(opt.toLowerCase()).toContain("claude");
+  for (const provider of ["openai", "anthropic"]) {
+    await page.getByTestId(`provider-${provider}`).click();
+    const options = await page.getByTestId("model-select").locator("option").allTextContents();
+    expect(options).toEqual(["Chat", "Thinking"]);
   }
 });
 
 test("multi-turn conversation works with Anthropic", async ({ page }) => {
-  await createChat(page, "anthropic", "claude-haiku-4-5-20251001");
+  await createChat(page, "anthropic", "chat");
 
   await sendMessage(page, "My secret number is 42. Remember it.");
   await sendMessage(page, "What was my secret number? Reply with just the number.");

@@ -51,28 +51,6 @@ async def test_dalle_model_includes_response_format(tmp_path, monkeypatch):
     assert call_kwargs["model"] == "dall-e-3"
 
 
-async def test_image_gen_ignores_model_spec(tmp_path, monkeypatch):
-    """IMAGE_MODEL must be used for generation even when OPENAI_MODELS excludes it."""
-    import backend.config as cfg
-    from backend.tools.image_gen import generate_image
-
-    # openai_models spec excludes the image model entirely — should have no effect
-    monkeypatch.setattr(cfg.settings, "openai_models", "gpt-4o gpt-4o-mini")
-    monkeypatch.setattr(cfg.settings, "openai_api_key", "test-key")
-    monkeypatch.setattr(cfg.settings, "image_model", "gpt-image-2")
-    monkeypatch.setattr(cfg.settings, "generated_dir", str(tmp_path))
-
-    fake_generate = AsyncMock(return_value=_make_fake_response())
-    with patch("backend.tools.image_gen.AsyncOpenAI") as mock_client_cls:
-        mock_client_cls.return_value.images.generate = fake_generate
-        result = await generate_image("a man in a pink suit")
-
-    assert fake_generate.called
-    assert fake_generate.call_args.kwargs["model"] == "gpt-image-2"
-    assert fake_generate.call_args.kwargs["prompt"] == "a man in a pink suit"
-    assert result["url"].startswith("/api/generated/")
-
-
 async def test_image_gen_no_api_key_raises(monkeypatch):
     import backend.config as cfg
     from backend.tools.image_gen import generate_image

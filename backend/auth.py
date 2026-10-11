@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -28,7 +28,7 @@ def invalidate_tokens(profile: Profile) -> None:
 
 
 def create_token(profile_id: int) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(profile_id),
         "iat": int(now.timestamp()),
@@ -56,7 +56,7 @@ async def get_current_profile(
     if not profile:
         raise HTTPException(status_code=401, detail="Profile not found")
     if issued_at and profile.token_invalidated_at:
-        token_time = datetime.fromtimestamp(issued_at, tz=timezone.utc)
+        token_time = datetime.fromtimestamp(issued_at, tz=UTC)
         if token_time <= profile.token_invalidated_at:
             raise HTTPException(status_code=401, detail="Token has been revoked")
     return profile

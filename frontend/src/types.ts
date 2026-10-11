@@ -120,15 +120,12 @@ export const PROVIDER_LABELS: Record<string, string> = {
 
 export const MODELS: Record<string, { label: string; value: string }[]> = {
   openai: [
-    { label: "GPT-4o", value: "gpt-4o" },
-    { label: "GPT-4o mini", value: "gpt-4o-mini" },
-    { label: "GPT-4 Turbo", value: "gpt-4-turbo" },
-    { label: "o1-mini", value: "o1-mini" },
+    { label: "Chat", value: "chat" },
+    { label: "Thinking", value: "thinking" },
   ],
   anthropic: [
-    { label: "Claude Opus 4.7", value: "claude-opus-4-7" },
-    { label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6" },
-    { label: "Claude Haiku 4.5", value: "claude-haiku-4-5-20251001" },
+    { label: "Chat", value: "chat" },
+    { label: "Thinking", value: "thinking" },
   ],
 };
 

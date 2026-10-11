@@ -5,7 +5,21 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .config import settings
 
-PROVIDER_DEFAULTS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-6", "ollama": ""}
+CLOUD_PROVIDERS = ("openai", "anthropic")
+# tiers a cloud chat can be on → label; chats store the tier so config changes move them to the new model.
+# the "task" tier runs background work (titling) only and is never offered.
+CHAT_TIERS = {"chat": "Chat", "thinking": "Thinking"}
+PROVIDER_DEFAULTS = {"openai": "chat", "anthropic": "chat", "ollama": ""}
+
+
+def tier_model(provider: str, tier: str) -> str:
+    """Real model configured for a cloud provider's tier (task / chat / thinking)."""
+    return getattr(settings, f"{provider}_model_{tier}")
+
+
+def _require_chat_tier(provider: str | None, model: str | None) -> None:
+    if provider in CLOUD_PROVIDERS and model is not None and model not in CHAT_TIERS:
+        raise ValueError(f"model must be one of: {', '.join(CHAT_TIERS)}")
 
 
 class DatasetCreate(BaseModel):
@@ -41,6 +55,11 @@ class ChatCreate(BaseModel):
     dataset_id: int | None = None
     web_search_enabled: bool | None = None  # None = use provider default
 
+    @model_validator(mode="after")
+    def cloud_model_must_be_a_tier(self) -> "ChatCreate":
+        _require_chat_tier(self.provider, self.model)
+        return self
+
 
 class ChatUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
@@ -55,6 +74,7 @@ class ChatUpdate(BaseModel):
             raise ValueError("provider is required when changing model")
         if self.provider is not None and self.model is None:
             raise ValueError("model is required when changing provider")
+        _require_chat_tier(self.provider, self.model)
         return self
 
 

@@ -20,7 +20,7 @@ from ..event_logging import audit_message, log_event
 from ..models import Attachment, Chat, Dataset, GeneratedImage, Message, Profile, utcnow
 from ..providers import AnthropicProvider, OllamaProvider, OpenAIProvider
 from ..providers.stub_provider import StubProvider
-from ..schemas import SendMessageRequest
+from ..schemas import SendMessageRequest, tier_model
 from .deps import get_owned_chat
 
 logger = logging.getLogger(__name__)
@@ -282,38 +282,41 @@ async def _generate_chat_title(
     system = "Generate a short title for the conversation shown. Reply with only the title — 5 words max, no quotes, no punctuation."
     user_msg = f"User: {user_content[:400]}\nAssistant: {assistant_content[:400]}"
     try:
-        if provider == "anthropic" and settings.anthropic_api_key:
+        # ollama chats stay fully local on the selected model
+        if provider == "ollama":
+            if settings.ollama_api_url:
+                from openai import AsyncOpenAI
+
+                base_url = settings.ollama_api_url.rstrip("/") + "/v1"
+                client = AsyncOpenAI(api_key="ollama", base_url=base_url)
+                resp = await client.chat.completions.create(
+                    model=model,
+                    max_tokens=20,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_msg},
+                    ],
+                )
+                return (resp.choices[0].message.content or "").strip()[:100]
+        elif provider == "anthropic" and settings.anthropic_api_key:
             import anthropic
 
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             resp = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=tier_model("anthropic", "task"),
                 max_tokens=20,
                 system=system,
                 messages=[{"role": "user", "content": user_msg}],
             )
             return resp.content[0].text.strip()[:100]
-        if provider == "openai" and settings.openai_api_key:
+        elif provider == "openai" and settings.openai_api_key:
             from openai import AsyncOpenAI
 
             client = AsyncOpenAI(api_key=settings.openai_api_key)
             resp = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=20,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg},
-                ],
-            )
-            return (resp.choices[0].message.content or "").strip()[:100]
-        if provider == "ollama" and settings.ollama_api_url:
-            from openai import AsyncOpenAI
-
-            base_url = settings.ollama_api_url.rstrip("/") + "/v1"
-            client = AsyncOpenAI(api_key="ollama", base_url=base_url)
-            resp = await client.chat.completions.create(
-                model=model,
-                max_tokens=20,
+                model=tier_model("openai", "task"),
+                max_completion_tokens=20,
+                reasoning_effort="none",
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_msg},

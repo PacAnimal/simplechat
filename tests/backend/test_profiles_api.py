@@ -1,5 +1,7 @@
 """Profile management and cross-profile isolation tests."""
 
+from datetime import UTC
+
 import pytest
 from httpx import AsyncClient
 
@@ -30,7 +32,7 @@ async def _auth_headers(c: AsyncClient, name: str, password: str) -> dict[str, s
 
 async def _create_chat(c: AsyncClient, headers: dict) -> int:
     r = await c.post(
-        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}, headers=headers
+        "/api/chats", json={"provider": "openai", "model": "chat"}, headers=headers
     )
     assert r.status_code == 201, r.text
     return r.json()["id"]
@@ -131,7 +133,7 @@ async def test_chats_require_auth(unauthed_client: AsyncClient):
 
 async def test_create_chat_requires_auth(unauthed_client: AsyncClient):
     r = await unauthed_client.post(
-        "/api/chats", json={"provider": "openai", "model": "gpt-4o"}
+        "/api/chats", json={"provider": "openai", "model": "chat"}
     )
     assert r.status_code == 401
 
@@ -162,11 +164,11 @@ async def test_invalid_token_rejected(unauthed_client: AsyncClient):
 
 
 async def test_expired_token_rejected(unauthed_client: AsyncClient):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     import jwt
 
-    payload = {"sub": "1", "exp": datetime.now(timezone.utc) - timedelta(days=1)}
+    payload = {"sub": "1", "exp": datetime.now(UTC) - timedelta(days=1)}
     token = jwt.encode(
         payload, "simplechat-dev-secret-change-in-production", algorithm="HS256"
     )

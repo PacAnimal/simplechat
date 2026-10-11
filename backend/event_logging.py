@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger("simplechat.events")
 
@@ -29,7 +29,7 @@ def audit_message(profile: str, chat_id: int, content: str, provider: str | None
     if _audit_logger is None:
         return
     entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "user": profile,
         "chat_id": chat_id,
         "provider": provider,

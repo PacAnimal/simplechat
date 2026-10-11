@@ -63,7 +63,7 @@ async def test_anthropic_web_search_returns_sources(real_anthropic_key):
     events = []
     async for event in provider.stream_chat(
         [{"role": "user", "content": _SEARCH_QUERY}],
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         web_search=True,
     ):
         events.append(event)
@@ -94,7 +94,7 @@ async def test_openai_web_search_returns_sources(real_openai_key):
     events = []
     async for event in provider.stream_chat(
         [{"role": "user", "content": _SEARCH_QUERY}],
-        model="gpt-4o-mini",
+        model="gpt-6.1-sol",
         web_search=True,
     ):
         events.append(event)

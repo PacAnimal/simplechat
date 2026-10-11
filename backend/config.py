@@ -28,12 +28,17 @@ class Settings(BaseSettings):
     password_min_length: int = 8
     # system prompt injected at the start of every Ollama request; useful for overriding guard templates
     ollama_system_prompt: str = ""
-    # space-separated model specs per provider; e.g. "Label@gpt-5.5 gpt-4o"; empty = show all
-    openai_models: str = ""
-    anthropic_models: str = ""
+    # real models behind each tier; task runs background work only, chat/thinking are offered to users
+    openai_model_task: str = "gpt-6-luna"
+    openai_model_chat: str = "gpt-6.1-sol"
+    openai_model_thinking: str = "gpt-6-astra"
+    anthropic_model_task: str = "claude-haiku-5-5"
+    anthropic_model_chat: str = "claude-sonnet-5-5"
+    anthropic_model_thinking: str = "claude-opus-5-5"
+    # space-separated Ollama model specs; e.g. "Label@llama3 mistral"; empty = show all
     ollama_models: str = ""
     # image generation model (OpenAI)
-    image_model: str = "gpt-image-2"
+    image_model: str = "gpt-image-2.5-flare"
     # write user/chatId/content to data/audit.log when enabled
     audit_log: bool = False
     # allow users to switch models on existing chats

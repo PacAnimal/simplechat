@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import time
 
 import anthropic
@@ -8,50 +7,40 @@ import httpx
 from openai import AsyncOpenAI
 
 from .config import settings
-from .schemas import PROVIDER_DEFAULTS
+from .schemas import CHAT_TIERS, CLOUD_PROVIDERS, PROVIDER_DEFAULTS, tier_model
 
 logger = logging.getLogger("simplechat.models")
 
-_CHAT_RE = re.compile(r"^(gpt-|o[0-9]|chatgpt-)", re.IGNORECASE)
-_EXCLUDE_RE = re.compile(
-    r"(embed|whisper|tts-|dall-e|instruct|realtime|transcr|moderat|search|audio|image)",
-    re.IGNORECASE,
-)
-
-_FALLBACK_OPENAI = [
-    {"id": "gpt-4o", "label": "GPT-4o"},
-    {"id": "gpt-4o-mini", "label": "GPT-4o mini"},
-    {"id": "gpt-4-turbo", "label": "GPT-4 Turbo"},
-    {"id": "o1-mini", "label": "o1-mini"},
-]
-_FALLBACK_ANTHROPIC = [
-    {"id": "claude-opus-4-7", "label": "Claude Opus 4.7"},
-    {"id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6"},
-    {"id": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5"},
-]
+_TIERS = ("task", *CHAT_TIERS)
 _cache: dict = {}
 _cache_time: float = 0.0
 _CACHE_TTL = 3600.0
 _refresh_lock = asyncio.Lock()
 
-# alias → real model ID per provider; populated during refresh
-_alias_map: dict[str, dict[str, str]] = {}
+# ollama alias → real model ID; populated during refresh
+_ollama_alias_map: dict[str, str] = {}
 
 
 def resolve_model_id(provider: str, alias: str) -> str:
-    """Translate a public model alias back to the real provider model ID.
+    """Translate a chat's stored model to the real provider model ID.
 
-    For unlabeled models the alias IS the real ID.  For labeled models the
-    real ID is hidden behind the label.  Falls back to the alias unchanged if
-    the map is empty (e.g. cache not yet populated).
+    Cloud chats store a tier, resolved against the current config so a config change moves every
+    chat on that tier.  Ollama chats store a public alias (a label hides the real ID).  Anything
+    unrecognised passes through unchanged.
     """
-    return _alias_map.get(provider, {}).get(alias, alias)
+    if provider in CLOUD_PROVIDERS:
+        return tier_model(provider, alias) if alias in CHAT_TIERS else alias
+    return _ollama_alias_map.get(alias, alias)
+
+
+def _tier_models() -> list[dict]:
+    return [{"id": tier, "label": label} for tier, label in CHAT_TIERS.items()]
 
 
 def _apply_spec(
     spec: str, fetched: list[dict], alias_store: dict[str, str]
 ) -> list[dict]:
-    """Apply a provider model spec against fetched models.
+    """Apply an Ollama model spec against fetched models.
 
     Spec format: space-separated entries, each either `model-id` or `Label@model-id`.
     Empty spec → return fetched models sorted alphabetically (real IDs as public IDs).
@@ -80,39 +69,22 @@ def _apply_spec(
     return result
 
 
-async def _fetch_openai_models() -> tuple[list[dict], set[str]]:
-    """Fetch live OpenAI models.
-
-    Returns (chat_models, all_model_ids).  all_model_ids is the full unfiltered
-    set, used to validate IMAGE_MODEL; empty set on failure.
-    """
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+async def _fetch_openai_ids() -> set[str]:
+    """Fetch live OpenAI model IDs; empty set on failure."""
     try:
-        resp = await client.models.list()
-        all_ids = {m.id for m in resp.data}
-        models_with_ts = [
-            ({"id": m.id, "label": m.id}, m.created)
-            for m in resp.data
-            if _CHAT_RE.match(m.id) and not _EXCLUDE_RE.search(m.id) and ":" not in m.id
-        ]
-        models_with_ts.sort(key=lambda x: x[1], reverse=True)
-        result = [m for m, _ in models_with_ts]
-        return (result if result else _FALLBACK_OPENAI, all_ids)
+        resp = await AsyncOpenAI(api_key=settings.openai_api_key).models.list()
+        return {m.id for m in resp.data}
     except Exception:
-        return (_FALLBACK_OPENAI, set())
+        return set()
 
 
-async def _fetch_anthropic_models() -> list[dict]:
-    """Fetch live Anthropic models; returns fallback on failure."""
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+async def _fetch_anthropic_ids() -> set[str]:
+    """Fetch live Anthropic model IDs; empty set on failure."""
     try:
-        resp = await client.models.list()
-        result = [
-            {"id": m.id, "label": getattr(m, "display_name", m.id)} for m in resp.data
-        ]
-        return result if result else _FALLBACK_ANTHROPIC
+        resp = await anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key).models.list()
+        return {m.id for m in resp.data}
     except Exception:
-        return _FALLBACK_ANTHROPIC
+        return set()
 
 
 async def _fetch_ollama_models() -> list[dict]:
@@ -131,82 +103,55 @@ async def _fetch_ollama_models() -> list[dict]:
 
 
 def log_available_models(
-    fetched: dict, final: dict, alias_map: dict[str, dict[str, str]]
+    configured: tuple[str, ...], ollama_fetched: list[dict], ollama_final: list[dict], ollama_alias_map: dict[str, str]
 ) -> None:
-    for provider, label in (
-        ("openai", "OpenAI"),
-        ("anthropic", "Anthropic"),
-        ("ollama", "Ollama"),
-    ):
-        all_models = fetched.get(provider, [])
-        available = final.get(provider, [])
-        if not all_models and not available:
-            continue
-        if all_models:
-            logger.info("%s models: %s", label, ", ".join(m["id"] for m in all_models))
-        if available:
-            pmap = alias_map.get(provider, {})
-            real_names = [pmap.get(m["id"], m["id"]) for m in available]
-            logger.info("%s available models: %s", label, ", ".join(real_names))
+    for provider, label in (("openai", "OpenAI"), ("anthropic", "Anthropic")):
+        if provider in configured:
+            tiers = ", ".join(f"{tier}={tier_model(provider, tier)}" for tier in _TIERS)
+            logger.info("%s models: %s", label, tiers)
+    if ollama_fetched:
+        logger.info("Ollama models: %s", ", ".join(m["id"] for m in ollama_fetched))
+    if ollama_final:
+        real_names = [ollama_alias_map.get(m["id"], m["id"]) for m in ollama_final]
+        logger.info("Ollama available models: %s", ", ".join(real_names))
 
 
-def _warn_image_model(openai_all_ids: set[str]) -> None:
-    """Warn if the configured image model is absent from the live OpenAI model list."""
-    if openai_all_ids and settings.image_model not in openai_all_ids:
-        logger.warning(
-            "Image model %s is not available in this OpenAI account",
-            settings.image_model,
-        )
+def _warn_missing_models(provider: str, live_ids: set[str]) -> None:
+    """Warn about configured models absent from the provider's live model list."""
+    if not live_ids:
+        return
+    wanted = [tier_model(provider, tier) for tier in _TIERS]
+    if provider == "openai":
+        wanted.append(settings.image_model)
+    for model in wanted:
+        if model not in live_ids:
+            logger.warning("Model %s is not available in this %s account", model, provider)
 
 
 async def refresh() -> dict:
-    global _cache, _cache_time, _alias_map
+    global _cache, _cache_time, _ollama_alias_map
 
-    # fetch only for configured providers; unconfigured → empty (not fallback)
-    openai_all_ids: set[str] = set()
-    tasks = []
-    task_keys = []
-
-    if settings.openai_api_key:
-        tasks.append(_fetch_openai_models())
-        task_keys.append("openai")
-    if settings.anthropic_api_key:
-        tasks.append(_fetch_anthropic_models())
-        task_keys.append("anthropic")
+    configured = tuple(p for p in CLOUD_PROVIDERS if getattr(settings, f"{p}_api_key"))
+    fetchers = {"openai": _fetch_openai_ids, "anthropic": _fetch_anthropic_ids}
+    tasks = [fetchers[p]() for p in configured]
     if settings.ollama_api_url:
         tasks.append(_fetch_ollama_models())
-        task_keys.append("ollama")
 
     results = await asyncio.gather(*tasks)
-    fetched: dict[str, list] = {"openai": [], "anthropic": [], "ollama": []}
-    for key, result in zip(task_keys, results):
-        if key == "openai":
-            openai_raw, openai_all_ids = result
-            fetched["openai"] = openai_raw
-        else:
-            fetched[key] = result
+    for provider, live_ids in zip(configured, results):
+        _warn_missing_models(provider, live_ids)
+    ollama_fetched = results[len(configured)] if settings.ollama_api_url else []
 
-    specs = {
-        "openai": settings.openai_models,
-        "anthropic": settings.anthropic_models,
-        "ollama": settings.ollama_models,
-    }
-    new_alias_map: dict[str, dict[str, str]] = {}
-    final: dict[str, list] = {}
-    for key in fetched:
-        store: dict[str, str] = {}
-        final[key] = _apply_spec(specs[key], fetched[key], store)
-        new_alias_map[key] = store
+    alias_store: dict[str, str] = {}
+    ollama_final = _apply_spec(settings.ollama_models, ollama_fetched, alias_store)
+    _ollama_alias_map = alias_store
 
-    _alias_map = new_alias_map
+    log_available_models(configured, ollama_fetched, ollama_final, alias_store)
 
-    _warn_image_model(openai_all_ids)
-    log_available_models(fetched, final, new_alias_map)
-
+    # unconfigured providers → empty, so the UI hides them
     _cache = {
-        "openai": final["openai"],
-        "anthropic": final["anthropic"],
-        "ollama": final["ollama"],
+        **{p: _tier_models() if p in configured else [] for p in CLOUD_PROVIDERS},
+        "ollama": ollama_final,
         "defaults": PROVIDER_DEFAULTS,
     }
     _cache_time = time.monotonic()

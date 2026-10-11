@@ -101,7 +101,7 @@ async def create_chat(
         raise HTTPException(
             status_code=503, detail=f"{label} is not configured on this server"
         )
-    model = body.model or PROVIDER_DEFAULTS.get(body.provider, "gpt-4o")
+    model = body.model or PROVIDER_DEFAULTS.get(body.provider, PROVIDER_DEFAULTS["openai"])
     if body.dataset_id is not None:
         ds = await db.get(Dataset, body.dataset_id)
         if not ds or ds.profile_id != profile.id:

@@ -10,12 +10,12 @@ A self-hosted, privacy-first AI chat platform — one Docker image, your API key
 
 ## Features
 
-- **Multi-provider** — switch between OpenAI (GPT-4o, o3, o3-pro, etc.), Anthropic (Claude Sonnet, Opus, Haiku), and self-hosted Ollama models per chat
+- **Multi-provider** — switch between OpenAI and Anthropic (each offered as **Chat** and **Thinking** tiers, with the real model configured server-side), and self-hosted Ollama models per chat
 - **Fully local mode** — point at a local Ollama instance and no data ever leaves your machine
 - **Multi-profile** — multiple named profiles, each with their own isolated chat history and settings
 - **Knowledge datasets (RAG)** — upload documents (PDF, Word, Excel, PowerPoint, CSV, text) and attach them to chats; the model retrieves relevant context automatically using Ollama embeddings
 - **Streaming responses** — real-time token-by-token output via SSE
-- **Tool use** — image generation (DALL-E / gpt-image-2), web search, and a safe math calculator
+- **Tool use** — image generation (DALL-E / gpt-image-2.5), web search, and a safe math calculator
 - **Extended thinking** — renders Claude's reasoning/thinking blocks in a collapsible UI
 - **File attachments** — attach text, JSON, CSV, Markdown, and PDF files directly to messages
 - **Markdown rendering** — syntax-highlighted code blocks and full Markdown support
@@ -92,11 +92,15 @@ The Dockerfile is a two-stage build: the first stage compiles the React frontend
 | `CREATE` | `local` | Who can create new profiles. `local` = localhost and RFC-1918 addresses only, `any` = anyone, `none` = nobody (existing profiles still work). |
 | `INCOMING_HTTP_PROXY` | `false` | Set to `true` to trust `X-Forwarded-For` / `X-Forwarded-Proto` headers from a local reverse proxy (nginx, Caddy, Traefik, etc.). |
 | `PASSWORD_MIN_LENGTH` | `8` | Minimum password length for new profiles. Set to `0` to disable password requirements entirely. |
-| `OPENAI_MODELS` | *(all)* | Space-separated list of OpenAI model IDs to expose, in display order. Empty = all available. Optionally rename with `Label@model-id`. Example: `GPT-4o@gpt-4o gpt-4o-mini`. Real model IDs behind a label are not sent to clients. |
-| `ANTHROPIC_MODELS` | *(all)* | Same as `OPENAI_MODELS` but for Anthropic models. Example: `Sonnet@claude-sonnet-4-6`. |
-| `OLLAMA_MODELS` | *(all)* | Same as `OPENAI_MODELS` but for Ollama models. Example: `Fast@llama3.1:8b`. |
+| `OPENAI_MODEL_TASK` | `gpt-6-luna` | OpenAI model for background tasks on OpenAI chats (titling). Never offered to users. |
+| `OPENAI_MODEL_CHAT` | `gpt-6.1-sol` | OpenAI model behind the **Chat** tier (the default). |
+| `OPENAI_MODEL_THINKING` | `gpt-6-astra` | OpenAI model behind the **Thinking** tier. |
+| `ANTHROPIC_MODEL_TASK` | `claude-haiku-5-5` | Anthropic model for background tasks on Anthropic chats (titling). Never offered to users. |
+| `ANTHROPIC_MODEL_CHAT` | `claude-sonnet-5-5` | Anthropic model behind the **Chat** tier (the default). |
+| `ANTHROPIC_MODEL_THINKING` | `claude-opus-5-5` | Anthropic model behind the **Thinking** tier. |
+| `OLLAMA_MODELS` | *(all)* | Space-separated list of Ollama model IDs to expose, in display order. Empty = all installed. Optionally rename with `Label@model-id` (the real ID is not sent to clients). Example: `Fast@llama3.1:8b`. |
 | `OLLAMA_SYSTEM_PROMPT` | *(none)* | System prompt prepended to every Ollama request. Useful for overriding a model's built-in guard template. Example: `You are a helpful assistant. Answer directly without disclaimers.` |
-| `IMAGE_MODEL` | `gpt-image-2` | OpenAI model used for image generation. |
+| `IMAGE_MODEL` | `gpt-image-2.5-flare` | OpenAI model used for image generation. |
 | `ALLOW_SWITCHING_MODELS` | `true` | Set to `false` to hide the model switcher and prevent users from changing models on existing chats. |
 | `REMOTE_CONTROL_SHARED_SECRET` | *(none)* | Shared secret enabling `/api/remote/*`, the surface a trusted server uses to act on a profile's behalf. Unset, the whole namespace answers 503. See **Remote control** below. |
 

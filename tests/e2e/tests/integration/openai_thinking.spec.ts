@@ -10,16 +10,16 @@ test.beforeEach(async ({ page }) => {
   await loginWithTestProfile(page);
 });
 
-test("basic chat works with gpt-5-pro", async ({ page }) => {
-  await createChat(page, "openai", "gpt-5-pro");
+test("basic chat works with OpenAI thinking tier", async ({ page }) => {
+  await createChat(page, "openai", "thinking");
   await sendMessage(page, "Reply with just the word: tangerine");
 
   const reply = page.locator('[data-testid="message-assistant"]').first();
   await expect(reply).toContainText("tangerine", { ignoreCase: true });
 });
 
-test("gpt-5-pro reads specs from uploaded motorcycle PDF", async ({ page }) => {
-  await createChat(page, "openai", "gpt-5-pro");
+test("OpenAI thinking tier reads specs from uploaded motorcycle PDF", async ({ page }) => {
+  await createChat(page, "openai", "thinking");
   await uploadFileFromPath(page, MOTORCYCLE_PDF, "application/pdf");
 
   await sendMessage(

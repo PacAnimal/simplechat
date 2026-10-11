@@ -202,7 +202,7 @@ async def test_disabled_provider_blocks_chat_creation(unauthed_client: AsyncClie
     user_token = r.json()["token"]
     c.headers.update({"Authorization": f"Bearer {user_token}"})
 
-    r2 = await c.post("/api/chats", json={"provider": "openai", "model": "gpt-4o"})
+    r2 = await c.post("/api/chats", json={"provider": "openai", "model": "chat"})
     assert r2.status_code == 403
 
 
