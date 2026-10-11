@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertCircleIcon, DatabaseIcon, GlobeIcon, XIcon, ChevronDownIcon, Menu } from "lucide-react";
 import { api, modelLabel } from "../lib/api";
 import { useStream } from "../lib/StreamContext";
-import type { Chat, Dataset, Message } from "../types";
+import type { Chat, Dataset } from "../types";
 import { MODELS, PROVIDER_LABELS } from "../types";
 import MessageBubble, { StreamingBubble } from "./MessageBubble";
 import MessageInput from "./MessageInput";
+
+// how near the end still counts as being at it
+const STICK_PX = 80;
 
 interface Props {
   chatId: number;
@@ -176,7 +180,11 @@ function DatasetSelector({ chatId, currentDatasetId, disabled }: {
 
 export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Props) {
   const qc = useQueryClient();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // whether this chat has been scrolled to its end yet
+  const opened = useRef(false);
+  // whether the reader is at the end, so new content is followed; scrolling up lets go
+  const stuck = useRef(true);
   const { activeStreams, unreadChats, justCompletedMsgId, startStream, cancelStream, markRead, clearJustCompleted } = useStream();
 
   const stream = activeStreams.get(chatId);
@@ -231,12 +239,39 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
     if (isUnread) markRead(chatId);
   }, [isUnread, chatId, markRead]);
 
-  // auto-scroll on new content
+  // Only the messages near the viewport are mounted, so a long chat costs what is on screen rather than
+  // its whole history. The last row is the tail (streaming reply, error, bottom spacer), so "the end" is
+  // one index that includes it.
+  const virtualizer = useVirtualizer({
+    count: messages.length + 1,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 160,
+    overscan: 6,
+    paddingStart: 32,
+    getItemKey: (i) => (i < messages.length ? messages[i].id : "tail"),
+  });
+
+  // open at the end, then follow new content only while the reader is still there
+  const totalSize = virtualizer.getTotalSize();
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, stream?.content, stream?.images.length, stream?.toolCalls.length]);
+    if (messages.length === 0 && !stream) return;
+    if (!opened.current) {
+      opened.current = true;
+      virtualizer.scrollToIndex(messages.length, { align: "end" });
+    } else if (stuck.current) {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, [virtualizer, totalSize, messages.length, stream, stream?.content, stream?.images.length, stream?.toolCalls.length]);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (el) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+  }
 
   function handleSend(content: string, attachmentIds: number[]) {
+    // sending is a request to see the reply
+    stuck.current = true;
     startStream(chatId, content, attachmentIds);
   }
 
@@ -295,41 +330,59 @@ export default function ChatWindow({ chatId, initialMessage, onOpenSidebar }: Pr
       </header>
 
       {/* messages */}
-      <div className="flex-1 overflow-y-auto py-8 px-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto pb-8 px-4" data-testid="message-scroll">
         {messages.length === 0 && !stream && !streamError ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted text-sm">Send a message to begin</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {messages.map((msg: Message) => (
-              <MessageBubble key={msg.id} message={msg} noAnimate={msg.id === justCompletedMsgId} />
-            ))}
+          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((row) => (
+              <div
+                key={row.key}
+                data-index={row.index}
+                ref={virtualizer.measureElement}
+                className="absolute top-0 left-0 w-full"
+                style={{ transform: `translateY(${row.start}px)` }}
+              >
+                {row.index < messages.length ? (
+                  <div className="pb-6">
+                    {/* only the newest fades in — older ones remount as they scroll back into view */}
+                    <MessageBubble
+                      message={messages[row.index]}
+                      noAnimate={messages[row.index].id === justCompletedMsgId || row.index < messages.length - 1}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    {stream?.status === "streaming" && (
+                      <StreamingBubble
+                        content={stream.content}
+                        images={stream.images}
+                        thinking={stream.thinking || undefined}
+                        toolCalls={stream.toolCalls.length > 0 ? stream.toolCalls : undefined}
+                      />
+                    )}
 
-            {stream?.status === "streaming" && (
-              <StreamingBubble
-                content={stream.content}
-                images={stream.images}
-                thinking={stream.thinking || undefined}
-                toolCalls={stream.toolCalls.length > 0 ? stream.toolCalls : undefined}
-              />
-            )}
-
-            {streamError && (
-              <div className="flex gap-3 max-w-3xl w-full mx-auto">
-                <div className="w-7 h-7 flex-shrink-0" />
-                <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2 flex-1">
-                  <AlertCircleIcon size={14} className="flex-shrink-0" />
-                  <span className="flex-1">{streamError}</span>
-                  <button onClick={() => cancelStream(chatId)} className="text-muted hover:text-primary">
-                    <XIcon size={12} />
-                  </button>
-                </div>
+                    {streamError && (
+                      <div className="flex gap-3 max-w-3xl w-full mx-auto">
+                        <div className="w-7 h-7 flex-shrink-0" />
+                        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2 flex-1">
+                          <AlertCircleIcon size={14} className="flex-shrink-0" />
+                          <span className="flex-1">{streamError}</span>
+                          <button onClick={() => cancelStream(chatId)} className="text-muted hover:text-primary">
+                            <XIcon size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="h-4" />
+                  </>
+                )}
               </div>
-            )}
+            ))}
           </div>
         )}
-        <div ref={bottomRef} className="h-4" />
       </div>
 
       {/* input */}

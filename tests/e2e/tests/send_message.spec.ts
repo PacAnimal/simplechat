@@ -126,8 +126,9 @@ test("chat list survives a full page reload", async ({ page }) => {
   await createChat(page, "openai");
   await sendMessage(page, "This chat should survive a reload");
 
-  // grab title before reload
+  // grab title before reload, once the generated one has replaced the placeholder
   const chatItem = page.locator('[data-testid^="chat-item-"]').first();
+  await expect(chatItem.locator("p").first()).not.toHaveText("New Chat", { timeout: 5000 });
   const titleBefore = (await chatItem.locator("p").first().textContent()) ?? "";
 
   // full page reload simulates server restart (DB is file-based)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { memo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -342,7 +342,8 @@ function AssistantContent({ content }: { content: string }) {
   );
 }
 
-export default function MessageBubble({ message, images = message.images ?? [], noAnimate = false }: Props) {
+// memoised: a streaming reply re-renders the chat window on every token, and the history must not re-parse
+export default memo(function MessageBubble({ message, images = message.images ?? [], noAnimate = false }: Props) {
   const isUser = message.role === "user";
   // latch: once noAnimate is ever true, keep suppressing for this element's lifetime
   const [suppressAnim, setSuppressAnim] = useState(noAnimate);
@@ -383,7 +384,7 @@ export default function MessageBubble({ message, images = message.images ?? [], 
       </div>
     </div>
   );
-}
+});
 
 export function StreamingBubble({
   content,
